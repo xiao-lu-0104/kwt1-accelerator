@@ -1,0 +1,44 @@
+# ---------------------------------------------------------------- environments
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# ---------------------------------------------------------------- data
+# Speech Commands v0.02 (7.8 GB) - download separately
+data/
+
+# official KWT reference implementation (314 MB)
+# clone from https://github.com/ARM-software/keyword-transformer @ 237e409
+external/
+
+# raw reference tensors (393 MB) - regenerate with tools/export_reference.py
+models/ref/
+
+# ---------------------------------------------------------------- simulation output
+sim/xsim.dir/
+sim/*.wdb
+sim/*.log
+sim/*.jou
+sim/*.pb
+sim/*.backup.*
+sim/webtalk*
+sim/.Xil/
+
+# ---------------------------------------------------------------- tool output
+.Xil/
+.dide/
+*.dcp
+*.bit
+*.ltx
+
+# ---------------------------------------------------------------- packaged release
+# regenerate with tools/make_release.ps1
+release/
+
+# ---------------------------------------------------------------- editors
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini

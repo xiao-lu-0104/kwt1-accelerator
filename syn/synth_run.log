@@ -1,0 +1,192 @@
+
+****** Vivado v2022.2 (64-bit)
+  **** SW Build 3671981 on Fri Oct 14 05:00:03 MDT 2022
+  **** IP Build 3669848 on Fri Oct 14 08:30:02 MDT 2022
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+
+source {syn\run_synth_only.tcl} -notrace
+==> 19 RTL files, part xc7a100tfgg484-2
+read_verilog: Time (s): cpu = 00:00:05 ; elapsed = 00:00:06 . Memory (MB): peak = 1002.016 ; gain = 118.105
+Command: synth_design -top kwt_top -part xc7a100tfgg484-2 -flatten_hierarchy none -directive runtimeoptimized
+Starting synth_design
+Attempting to get a license for feature 'Synthesis' and/or device 'xc7a100t'
+INFO: [Common 17-349] Got license for feature 'Synthesis' and/or device 'xc7a100t'
+INFO: [Synth 8-7079] Multithreading enabled for synth_design using a maximum of 2 processes.
+INFO: [Synth 8-7078] Launching helper process for spawning children vivado processes
+INFO: [Synth 8-7075] Helper process launched with PID 43252
+INFO: [Synth 8-11241] undeclared symbol 'REGCCE', assumed default net type 'wire' [D:/Xilinx/Vivado/2022.2/data/verilog/src/unimacro/BRAM_SINGLE_MACRO.v:2170]
+---------------------------------------------------------------------------------
+Starting Synthesize : Time (s): cpu = 00:00:05 ; elapsed = 00:00:05 . Memory (MB): peak = 1440.383 ; gain = 413.500
+---------------------------------------------------------------------------------
+INFO: [Synth 8-6157] synthesizing module 'kwt_top' [E:/chipdesign/rtl/kwt_top.v:7]
+INFO: [Synth 8-6157] synthesizing module 'kwt_gemm_engine' [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+	Parameter IN_DIM bound to: 64 - type: integer 
+	Parameter OUT_DIM bound to: 64 - type: integer 
+	Parameter TOKENS bound to: 98 - type: integer 
+	Parameter WB bound to: 4 - type: integer 
+	Parameter OUT_BITS bound to: 8 - type: integer 
+	Parameter AW_ACT bound to: 13 - type: integer 
+	Parameter AW_WGT bound to: 12 - type: integer 
+	Parameter AW_BP bound to: 6 - type: integer 
+	Parameter AW_OUT bound to: 11 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'kwt_gemm4' [E:/chipdesign/rtl/kwt_gemm4.v:7]
+	Parameter WB bound to: 4 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'kwt_dot64' [E:/chipdesign/rtl/kwt_dot64.v:5]
+	Parameter WB bound to: 4 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'kwt_dot64' (0#1) [E:/chipdesign/rtl/kwt_dot64.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_gemm4' (0#1) [E:/chipdesign/rtl/kwt_gemm4.v:7]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_gemm_engine' (0#1) [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+INFO: [Synth 8-6157] synthesizing module 'kwt_encoder_12' [E:/chipdesign/rtl/kwt_encoder_12.v:19]
+	Parameter TOK bound to: 99 - type: integer 
+	Parameter D bound to: 64 - type: integer 
+	Parameter FF bound to: 256 - type: integer 
+	Parameter NLAYER bound to: 12 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'kwt_encoder_layer' [E:/chipdesign/rtl/kwt_encoder_layer.v:13]
+	Parameter TOK bound to: 99 - type: integer 
+	Parameter D bound to: 64 - type: integer 
+	Parameter FF bound to: 256 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'kwt_attention' [E:/chipdesign/rtl/kwt_attention.v:8]
+INFO: [Synth 8-6157] synthesizing module 'kwt_attn_qkv' [E:/chipdesign/rtl/kwt_attn_qkv.v:10]
+INFO: [Synth 8-6157] synthesizing module 'kwt_gemm_engine__parameterized0' [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+	Parameter IN_DIM bound to: 64 - type: integer 
+	Parameter OUT_DIM bound to: 64 - type: integer 
+	Parameter TOKENS bound to: 99 - type: integer 
+	Parameter WB bound to: 4 - type: integer 
+	Parameter AW_ACT bound to: 13 - type: integer 
+	Parameter AW_WGT bound to: 14 - type: integer 
+	Parameter AW_BP bound to: 8 - type: integer 
+	Parameter AW_OUT bound to: 13 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'kwt_gemm_engine__parameterized0' (0#1) [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_attn_qkv' (0#1) [E:/chipdesign/rtl/kwt_attn_qkv.v:10]
+INFO: [Synth 8-6157] synthesizing module 'kwt_attn_score' [E:/chipdesign/rtl/kwt_attn_score.v:9]
+INFO: [Synth 8-6157] synthesizing module 'kwt_gemm_engine__parameterized1' [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+	Parameter IN_DIM bound to: 64 - type: integer 
+	Parameter OUT_DIM bound to: 100 - type: integer 
+	Parameter TOKENS bound to: 99 - type: integer 
+	Parameter WB bound to: 8 - type: integer 
+	Parameter OUT_BITS bound to: 16 - type: integer 
+	Parameter AW_ACT bound to: 13 - type: integer 
+	Parameter AW_WGT bound to: 14 - type: integer 
+	Parameter AW_BP bound to: 8 - type: integer 
+	Parameter AW_OUT bound to: 13 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'kwt_gemm4__parameterized0' [E:/chipdesign/rtl/kwt_gemm4.v:7]
+	Parameter WB bound to: 8 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'kwt_dot64__parameterized0' [E:/chipdesign/rtl/kwt_dot64.v:5]
+	Parameter WB bound to: 8 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'kwt_dot64__parameterized0' (0#1) [E:/chipdesign/rtl/kwt_dot64.v:5]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_gemm4__parameterized0' (0#1) [E:/chipdesign/rtl/kwt_gemm4.v:7]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_gemm_engine__parameterized1' (0#1) [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_attn_score' (0#1) [E:/chipdesign/rtl/kwt_attn_score.v:9]
+INFO: [Synth 8-6157] synthesizing module 'kwt_softmax' [E:/chipdesign/rtl/kwt_softmax.v:11]
+	Parameter N bound to: 99 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'kwt_exp_lut' [E:/chipdesign/rtl/kwt_exp_lut.v:4]
+INFO: [Synth 8-226] default block is never used [E:/chipdesign/rtl/kwt_exp_lut.v:9]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_exp_lut' (0#1) [E:/chipdesign/rtl/kwt_exp_lut.v:4]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_softmax' (0#1) [E:/chipdesign/rtl/kwt_softmax.v:11]
+INFO: [Synth 8-6157] synthesizing module 'kwt_attn_av' [E:/chipdesign/rtl/kwt_attn_av.v:9]
+INFO: [Synth 8-6157] synthesizing module 'kwt_gemm_engine__parameterized2' [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+	Parameter IN_DIM bound to: 128 - type: integer 
+	Parameter OUT_DIM bound to: 64 - type: integer 
+	Parameter TOKENS bound to: 99 - type: integer 
+	Parameter WB bound to: 8 - type: integer 
+	Parameter OUT_BITS bound to: 8 - type: integer 
+	Parameter AW_ACT bound to: 14 - type: integer 
+	Parameter AW_WGT bound to: 13 - type: integer 
+	Parameter AW_BP bound to: 8 - type: integer 
+	Parameter AW_OUT bound to: 13 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'kwt_gemm_engine__parameterized2' (0#1) [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_attn_av' (0#1) [E:/chipdesign/rtl/kwt_attn_av.v:9]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_attention' (0#1) [E:/chipdesign/rtl/kwt_attention.v:8]
+INFO: [Synth 8-6157] synthesizing module 'kwt_layernorm' [E:/chipdesign/rtl/kwt_layernorm.v:11]
+	Parameter N bound to: 64 - type: integer 
+	Parameter ROWS bound to: 99 - type: integer 
+	Parameter AW bound to: 13 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'kwt_rsqrt_lut' [E:/chipdesign/rtl/kwt_rsqrt_lut.v:3]
+INFO: [Synth 8-226] default block is never used [E:/chipdesign/rtl/kwt_rsqrt_lut.v:8]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_rsqrt_lut' (0#1) [E:/chipdesign/rtl/kwt_rsqrt_lut.v:3]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_layernorm' (0#1) [E:/chipdesign/rtl/kwt_layernorm.v:11]
+INFO: [Synth 8-6157] synthesizing module 'kwt_gemm_engine__parameterized3' [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+	Parameter IN_DIM bound to: 64 - type: integer 
+	Parameter OUT_DIM bound to: 256 - type: integer 
+	Parameter TOKENS bound to: 99 - type: integer 
+	Parameter WB bound to: 4 - type: integer 
+	Parameter OUT_BITS bound to: 8 - type: integer 
+	Parameter AW_ACT bound to: 13 - type: integer 
+	Parameter AW_WGT bound to: 14 - type: integer 
+	Parameter AW_BP bound to: 8 - type: integer 
+	Parameter AW_OUT bound to: 13 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'kwt_gemm_engine__parameterized3' (0#1) [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+INFO: [Synth 8-6157] synthesizing module 'kwt_gemm_engine__parameterized4' [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+	Parameter IN_DIM bound to: 256 - type: integer 
+	Parameter OUT_DIM bound to: 64 - type: integer 
+	Parameter TOKENS bound to: 99 - type: integer 
+	Parameter WB bound to: 4 - type: integer 
+	Parameter OUT_BITS bound to: 8 - type: integer 
+	Parameter AW_ACT bound to: 15 - type: integer 
+	Parameter AW_WGT bound to: 14 - type: integer 
+	Parameter AW_BP bound to: 8 - type: integer 
+	Parameter AW_OUT bound to: 11 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'kwt_gemm_engine__parameterized4' (0#1) [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+INFO: [Synth 8-6157] synthesizing module 'kwt_gelu' [E:/chipdesign/rtl/kwt_gelu.v:4]
+INFO: [Synth 8-6157] synthesizing module 'kwt_gelu_lut' [E:/chipdesign/rtl/kwt_gelu_lut.v:4]
+INFO: [Synth 8-226] default block is never used [E:/chipdesign/rtl/kwt_gelu_lut.v:9]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_gelu_lut' (0#1) [E:/chipdesign/rtl/kwt_gelu_lut.v:4]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_gelu' (0#1) [E:/chipdesign/rtl/kwt_gelu.v:4]
+INFO: [Synth 8-6157] synthesizing module 'kwt_align_add' [E:/chipdesign/rtl/kwt_align_add.v:8]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_align_add' (0#1) [E:/chipdesign/rtl/kwt_align_add.v:8]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_encoder_layer' (0#1) [E:/chipdesign/rtl/kwt_encoder_layer.v:13]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_encoder_12' (0#1) [E:/chipdesign/rtl/kwt_encoder_12.v:19]
+INFO: [Synth 8-6157] synthesizing module 'kwt_gemm_engine__parameterized5' [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+	Parameter IN_DIM bound to: 64 - type: integer 
+	Parameter OUT_DIM bound to: 16 - type: integer 
+	Parameter TOKENS bound to: 1 - type: integer 
+	Parameter WB bound to: 4 - type: integer 
+	Parameter OUT_BITS bound to: 8 - type: integer 
+	Parameter AW_ACT bound to: 6 - type: integer 
+	Parameter AW_WGT bound to: 10 - type: integer 
+	Parameter AW_BP bound to: 4 - type: integer 
+	Parameter AW_OUT bound to: 2 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'kwt_gemm_engine__parameterized5' (0#1) [E:/chipdesign/rtl/kwt_gemm_engine.v:13]
+INFO: [Synth 8-6155] done synthesizing module 'kwt_top' (0#1) [E:/chipdesign/rtl/kwt_top.v:7]
+WARNING: [Synth 8-7137] Register t_pipe_reg in module kwt_gemm_engine has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [E:/chipdesign/rtl/kwt_gemm_engine.v:123]
+WARNING: [Synth 8-7137] Register g_pipe_reg in module kwt_gemm_engine has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [E:/chipdesign/rtl/kwt_gemm_engine.v:124]
+WARNING: [Synth 8-7137] Register t_out_reg in module kwt_gemm_engine has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [E:/chipdesign/rtl/kwt_gemm_engine.v:170]
+WARNING: [Synth 8-7137] Register g_out_reg in module kwt_gemm_engine has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [E:/chipdesign/rtl/kwt_gemm_engine.v:169]
+WARNING: [Synth 8-4767] Trying to implement RAM ' ' in registers. Block RAM or DRAM implementation is not possible; see log for reasons.
+	1: RAM has multiple writes via different ports in same process. If RAM inferencing intended, write to one port per process. 
+	2: Unable to determine number of words or word size in RAM. 
+	3: No valid read/write found for RAM. 
+RAM dissolved into registers
+WARNING: [Synth 8-4767] Trying to implement RAM 'act_buf_reg' in registers. Block RAM or DRAM implementation is not possible; see log for reasons.
+Reason is one or more of the following :
+	1: RAM has too many ports (16). Maximum supported = 16. 
+	2: Unable to determine number of words or word size in RAM. 
+	3: No valid read/write found for RAM. 
+RAM "act_buf_reg" dissolved into registers
+WARNING: [Synth 8-4767] Trying to implement RAM 'wgt_buf_reg' in registers. Block RAM or DRAM implementation is not possible; see log for reasons.
+Reason is one or more of the following :
+	1: RAM has too many ports (16). Maximum supported = 16. 
+	2: Unable to determine number of words or word size in RAM. 
+	3: No valid read/write found for RAM. 
+RAM "wgt_buf_reg" dissolved into registers
+WARNING: [Synth 8-7137] Register t_pipe_reg in module kwt_gemm_engine__parameterized0 has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [E:/chipdesign/rtl/kwt_gemm_engine.v:123]
+WARNING: [Synth 8-7137] Register g_pipe_reg in module kwt_gemm_engine__parameterized0 has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [E:/chipdesign/rtl/kwt_gemm_engine.v:124]
+WARNING: [Synth 8-7137] Register t_out_reg in module kwt_gemm_engine__parameterized0 has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [E:/chipdesign/rtl/kwt_gemm_engine.v:170]
+WARNING: [Synth 8-7137] Register g_out_reg in module kwt_gemm_engine__parameterized0 has both Set and reset with same priority. This may cause simulation mismatches. Consider rewriting code  [E:/chipdesign/rtl/kwt_gemm_engine.v:169]
+WARNING: [Synth 8-4767] Trying to implement RAM ' ' in registers. Block RAM or DRAM implementation is not possible; see log for reasons.
+	1: RAM has multiple writes via different ports in same process. If RAM inferencing intended, write to one port per process. 
+	2: Unable to determine number of words or word size in RAM. 
+	3: No valid read/write found for RAM. 
+RAM dissolved into registers
+WARNING: [Synth 8-4767] Trying to implement RAM 'act_buf_reg' in registers. Block RAM or DRAM implementation is not possible; see log for reasons.
+Reason is one or more of the following :
+	1: RAM has too many ports (16). Maximum supported = 16. 
+	2: Unable to determine number of words or word size in RAM. 
+	3: No valid read/write found for RAM. 
+RAM "act_buf_reg" dissolved into registers
+WARNING: [Synth 8-4767] Trying to implement RAM 'wgt_buf_reg' in registers. Block RAM or DRAM implementation is not possible; see log for reasons.
+Reason is one or more of the following :
+	1: RAM has too many ports (16). Maximum supported = 16. 
+	2: Unable to determine number of words or word size in RAM. 
+	3: No valid read/write found for RAM. 
+RAM "wgt_buf_reg" dissolved into registers
