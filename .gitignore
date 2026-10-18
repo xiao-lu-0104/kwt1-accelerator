@@ -17,13 +17,15 @@ models/ref/
 
 # ---------------------------------------------------------------- simulation output
 sim/xsim.dir/
-sim/*.wdb
-sim/*.log
-sim/*.jou
-sim/*.pb
-sim/*.backup.*
 sim/webtalk*
 sim/.Xil/
+
+# xsim / xvlog artifacts (wherever they are produced)
+*.wdb
+*.log
+*.jou
+*.pb
+*.backup.*
 
 # ---------------------------------------------------------------- tool output
 .Xil/
