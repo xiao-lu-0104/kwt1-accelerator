@@ -30,15 +30,30 @@ rtl/            18 个可综合模块（已验证 bit-exact）
   kwt_encoder_layer.v   单层 PostNorm Encoder
   kwt_encoder_12.v      12 层调度 + 参数 ROM 切换
   kwt_top.v             整机（MFCC → patch_proj → 12 层 → head → argmax）
+  kwt_axi_slave.v       AXI4-Lite 从机包装（寄存器映射见 doc/08）
 
-tb/             14 个 testbench（逐位比对，无容差）
+tb/             15 个 testbench（逐位比对，无容差）
 tools/          数值模型、标定、向量生成器
-doc/            设计文档 00–07
+doc/            设计文档 00–09
 models/         权重（npz）与量化参数（scales.json）
 sim/            仿真工作目录 + run_all.ps1 一键回归
+syn/           综合脚本（Artix-7 估算；标准单元库到位后替换 target）
 rtl_verified/   当前通过验证的 RTL 快照
 tb_verified/    当前通过验证的 TB 快照
 ```
+
+## 环境准备
+
+仓库只包含源码与必要的权重文件，以下内容因体积原因被 `.gitignore` 排除，需自行准备：
+
+| 内容 | 获取方式 |
+|---|---|
+| `.venv/` Python 环境 | `python -m venv .venv` 后 `pip install tensorflow==2.15.1 numpy==1.26.4 scipy` |
+| `data/speech_commands_v0.02/`（7.8 GB） | 从 Google Speech Commands 官方地址下载后解压到该目录 |
+| `external/keyword-transformer/`（314 MB） | `git clone https://github.com/ARM-software/keyword-transformer`，checkout `237e409` |
+| `models/ref/`（393 MB 参考张量） | `.venv\Scripts\python tools\export_reference.py --split validation --count 400 --offset 200` |
+
+只有重新生成向量时才需要 `models/ref/`；复跑已有向量的仿真只需 `.venv`（或直接用 `sim/vectors/`）。
 
 ## 快速验证
 
