@@ -1,6 +1,6 @@
 # KWT-1 关键词唤醒 Transformer 加速器
 
-面向 2026「中国电子杯」高校 ICT 大赛研究生赛题三（飞腾命题）的 RTL 实现。
+面向 2026 嵌入式芯片与系统设计竞赛 · 芯片设计赛道（研究生组）的 RTL 实现。
 
 - 模型：KWT-1（`d_model=64`, `mlp_dim=256`, 12 层 PostNorm Encoder, 99 token）
 - 量化：权重 int4（per-output-channel），激活 int8
