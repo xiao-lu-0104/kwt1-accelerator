@@ -47,3 +47,7 @@ desktop.ini
 
 # Simulator work libraries (also generated when invoked from repository root)
 xsim.dir/
+
+# local pre-refactor backups
+rtl_pre_sram/
+tb_pre_sram/

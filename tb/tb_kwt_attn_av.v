@@ -99,27 +99,6 @@ module tb_kwt_attn_av;
             errors = errors + 1;
         end
         $display("cycles=%0d words=%0d (expect %0d)", cycle_count, got, N_WORD);
-        $display("DBG wgt[0]=%02x wgt[2944]=%02x wgt[3072]=%02x wgt[8191]=%02x",
-                 dut.u_engine.wgt_buf[0], dut.u_engine.wgt_buf[2944],
-                 dut.u_engine.wgt_buf[3072], dut.u_engine.wgt_buf[8191]);
-        $display("DBG wg24=%02x/%02x wg25=%02x wg26=%02x wg27=%02x wg6hdr=%02x %02x %02x %02x",
-                 dut.u_engine.wgt_buf[24*128], dut.u_engine.wgt_buf[24*128+127],
-                 dut.u_engine.wgt_buf[25*128], dut.u_engine.wgt_buf[26*128],
-                 dut.u_engine.wgt_buf[27*128],
-                 dut.u_engine.wgt_buf[6*128], dut.u_engine.wgt_buf[7*128],
-                 dut.u_engine.wgt_buf[8*128], dut.u_engine.wgt_buf[9*128]);
-        $display("DBG act[0]=%02x act[96]=%02x act[12671]=%02x",
-                 dut.u_engine.act_buf[0], dut.u_engine.act_buf[96],
-                 dut.u_engine.act_buf[12671]);
-        $display("DBG m[0]=%0d m[23]=%0d m[24]=%0d m[63]=%0d bias[24]=%0d",
-                 dut.u_engine.m_buf[0], dut.u_engine.m_buf[23],
-                 dut.u_engine.m_buf[24], dut.u_engine.m_buf[63],
-                 dut.u_engine.bias_buf[24]);
-        $display("DBG act t0[0..7]=%02x %02x %02x %02x %02x %02x %02x %02x",
-                 dut.u_engine.act_buf[0], dut.u_engine.act_buf[1],
-                 dut.u_engine.act_buf[2], dut.u_engine.act_buf[3],
-                 dut.u_engine.act_buf[4], dut.u_engine.act_buf[5],
-                 dut.u_engine.act_buf[6], dut.u_engine.act_buf[7]);
 
         repeat (5) @(negedge clk);
         if (got != N_WORD) begin

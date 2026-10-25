@@ -241,10 +241,6 @@ module tb_kwt_encoder_layer;
         $display("  cnts: at=%0d ln=%0d f1=%0d f2=%0d", at_cnt, ln_cnt, f1_cnt, f2_cnt);
         $display("  attn x_buf[0..3]=%0d %0d %0d %0d", $signed(dut.u_attn.x_buf[0]),
                  $signed(dut.u_attn.x_buf[1]), $signed(dut.u_attn.x_buf[2]), $signed(dut.u_attn.x_buf[3]));
-        $display("  q engine: wgt[0]=%0d act[0]=%0d m[0]=%0d",
-                 $signed(dut.u_attn.u_qkv.u_q.wgt_buf[0]),
-                 $signed(dut.u_attn.u_qkv.u_q.act_buf[0]),
-                 $signed(dut.u_attn.u_qkv.u_q.m_buf[0]));
         $display("  attn q_buf[0..3]=%0d %0d %0d %0d", $signed(dut.u_attn.q_buf[0]),
                  $signed(dut.u_attn.q_buf[1]), $signed(dut.u_attn.q_buf[2]), $signed(dut.u_attn.q_buf[3]));
         $display("  attn p_buf[0..3]=%0d %0d %0d %0d", $signed(dut.u_attn.p_buf[0]),

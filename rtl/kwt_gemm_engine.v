@@ -64,30 +64,85 @@ module kwt_gemm_engine #(
     localparam SEGS      = IN_DIM / 64;
     localparam LIM       = (1 << (OUT_BITS-1)) - 1;
 
-    reg [7:0]  act_buf [0:TOTAL_ACT-1];
-    reg [WB-1:0] wgt_buf [0:TOTAL_WGT-1];
+    // ------------------------------------------------------------------
+    // operand storage: standard dual-port SRAMs with width packing
+    //
+    //   act: 16 int8 per 128-bit word -> a 64-wide fetch is four words
+    //   wgt: 64 elements per word     -> 4 channels x 64 inputs is four words
+    //
+    // Each buffer uses two kwt_sram_2r1w macros (2R1W each), so the four
+    // parallel operand fetches only need standard dual-port primitives.
+    // The rules only allow single/dual-port macros, so no custom many-port
+    // array is used anywhere.
+    // ------------------------------------------------------------------
+    localparam AGRP    = 16;                    // int8 per activation word
+    localparam AWD     = TOTAL_ACT / AGRP;
+    localparam AW_ACTL = $clog2(AWD);
+    localparam WGRP    = 64;                    // elements per weight word
+    localparam WWGT    = WGRP * WB;
+    localparam AWDW    = TOTAL_WGT / WGRP;
+    localparam AW_WGTL = $clog2(AWDW);
+    localparam KPG     = IN_DIM / 64;           // weight words per channel/segment
+    localparam LOG2_IN = $clog2(IN_DIM);
+    localparam LOG2_K  = $clog2(KPG);
+    localparam AW_CG   = $clog2(OUT_DIM);       // channel index width
+
     reg signed [31:0] bias_buf [0:OUT_DIM-1];
     reg signed [31:0] m_buf    [0:OUT_DIM-1];
 
-    integer kk;
     always @(posedge clk) begin
-        if (act_we) act_buf[act_addr] <= act_data;
-        if (act_we4) begin
-            for (kk = 0; kk < 4; kk = kk + 1)
-                act_buf[act_addr + kk] <= act_data32[kk*8 +: 8];
-        end
-        if (wgt_we) wgt_buf[wgt_addr] <= wgt_data;
-        if (wgt_we16) begin
-            for (kk = 0; kk < 16; kk = kk + 1)
-                wgt_buf[wgt_addr + kk] <= wgt_data16[kk*4 +: 4];
-        end
-        if (wgt_we4) begin
-            for (kk = 0; kk < 4; kk = kk + 1)
-                wgt_buf[wgt_addr + kk] <= wgt_data_w4[kk*WB +: WB];
-        end
         if (bp_we) begin
             bias_buf[bp_addr] <= bp_bias;
             m_buf[bp_addr]    <= bp_m;
+        end
+    end
+
+    // ---- activation write port: byte lanes inside a 128-bit word ----
+    // bank interleaves on address bit4 (32 bytes per bank pair), so the
+    // internal address is the global word index shifted right by one
+    wire [AW_ACTL-1:0] act_w_word = act_addr >> 5;
+    wire [3:0]         act_w_lane = act_addr[3:0];
+    wire               act_w_bank = act_addr[4];
+    wire               act_wr     = act_we | act_we4;
+
+    reg  [127:0]       act_wdata;
+    reg  [15:0]        act_wmask;
+    always @(*) begin
+        act_wdata = 128'd0;
+        act_wmask = 16'd0;
+        if (act_we4) begin
+            act_wdata = {96'd0, act_data32} << (act_w_lane*8);
+            act_wmask = 16'h000F << act_w_lane;
+        end else if (act_we) begin
+            act_wdata = {120'd0, act_data} << (act_w_lane*8);
+            act_wmask = 16'h0001 << act_w_lane;
+        end
+    end
+
+    // ---- weight write port: element lanes inside a 64-element word ----
+    // bank = output channel parity, so a 4-channel fetch hits each bank twice
+    wire [AW_CG-1:0]   wgt_cglob  = wgt_addr >> LOG2_IN;
+    wire               wgt_wbank  = wgt_cglob[0];
+    wire [AW_WGTL-1:0] wgt_wint   = (((wgt_cglob >> 2) << (LOG2_K+1)) |
+                                     (((wgt_cglob >> 1) & 1'b1) << LOG2_K) |
+                                     ((wgt_addr >> 6) & (KPG-1)));
+    wire [5:0]         wgt_woff   = wgt_addr[5:0];
+    wire               wgt_wr     = wgt_we | wgt_we4 | wgt_we16;
+
+    reg  [WWGT-1:0]    wgt_wdata;
+    reg  [63:0]        wgt_wmask;
+    always @(*) begin
+        wgt_wdata = {WWGT{1'b0}};
+        wgt_wmask = 64'd0;
+        if (wgt_we16) begin
+            wgt_wdata = {{(WWGT-64){1'b0}}, wgt_data16} << (wgt_woff*WB);
+            wgt_wmask = 64'h0000_0000_0000_FFFF << wgt_woff;
+        end else if (wgt_we4) begin
+            wgt_wdata = {{(WWGT-8*WB){1'b0}}, wgt_data_w4} << (wgt_woff*WB);
+            wgt_wmask = 64'h0000_0000_0000_000F << wgt_woff;
+        end else if (wgt_we) begin
+            wgt_wdata = {{(WWGT-WB){1'b0}}, wgt_data} << (wgt_woff*WB);
+            wgt_wmask = 64'h0000_0000_0000_0001 << wgt_woff;
         end
     end
 
@@ -115,21 +170,64 @@ module kwt_gemm_engine #(
     // pipelined issue/output counters (SEGS==1 fast path)
     reg [6:0] t_pipe;
     reg [5:0] g_pipe;
+    reg [6:0] t_pipe_q;          // one-cycle delayed copy for index pairing
+    reg [5:0] g_pipe_q;
     reg [6:0] t_out;
     reg [5:0] g_out;
 
-    reg [511:0]  act_flat;
-    reg [4*64*WB-1:0] wgt_flat;
     wire [6:0] t_issel = (SEGS == 1) ? t_pipe : t_lat;
     wire [5:0] g_issel = (SEGS == 1) ? g_pipe : g_lat;
-    integer jj;
-    always @(*) begin
-        for (jj = 0; jj < 64; jj = jj + 1)
-            act_flat[jj*8 +: 8] = act_buf[t_issel*IN_DIM + seg_lat*64 + jj];
-        for (jj = 0; jj < 256; jj = jj + 1)
-            wgt_flat[jj*WB +: WB] =
-                wgt_buf[(g_issel*4 + (jj/64))*IN_DIM + seg_lat*64 + (jj%64)];
-    end
+
+    // ---- four parallel operand reads from two 2R1W banks each ----
+    // act word base is a multiple of four, so bank = word bit0 gives two
+    // distinct internal addresses per bank for the four requested words
+    wire [AW_ACTL-1:0] act_r_base = t_issel*(IN_DIM/AGRP) + seg_lat*4;
+    wire [AW_ACTL-1:0] act_r_lo   = act_r_base >> 1;
+    wire [AW_ACTL-1:0] act_r_hi   = (act_r_base >> 1) + 1'b1;
+
+    wire [127:0] act_q_b0l, act_q_b0h, act_q_b1l, act_q_b1h;
+
+    kwt_sram_2r1w #(.DW(128), .AW(AW_ACTL), .SW(8), .MASKW(16)) u_act_b0 (
+        .clk(clk),
+        .a_addr(act_r_lo), .a_q(act_q_b0l),
+        .b_addr(act_r_hi), .b_q(act_q_b0h),
+        .we(act_wr & ~act_w_bank), .w_addr(act_w_word),
+        .w_data(act_wdata), .w_mask(act_wmask)
+    );
+    kwt_sram_2r1w #(.DW(128), .AW(AW_ACTL), .SW(8), .MASKW(16)) u_act_b1 (
+        .clk(clk),
+        .a_addr(act_r_lo), .a_q(act_q_b1l),
+        .b_addr(act_r_hi), .b_q(act_q_b1h),
+        .we(act_wr &  act_w_bank), .w_addr(act_w_word),
+        .w_data(act_wdata), .w_mask(act_wmask)
+    );
+
+    // k=0 -> b0.lo, k=1 -> b1.lo, k=2 -> b0.hi, k=3 -> b1.hi
+    wire [511:0] act_flat = {act_q_b1h, act_q_b0h, act_q_b1l, act_q_b0l};
+
+    // weight word address: channel group g, sub-channel 0/1 (hi) and segment
+    wire [AW_WGTL-1:0] wgt_r_lo = g_issel*(2*KPG) + seg_lat;
+    wire [AW_WGTL-1:0] wgt_r_hi = wgt_r_lo + KPG;
+
+    wire [WWGT-1:0] wgt_q_b0l, wgt_q_b0h, wgt_q_b1l, wgt_q_b1h;
+
+    kwt_sram_2r1w #(.DW(WWGT), .AW(AW_WGTL), .SW(WB), .MASKW(64)) u_wgt_b0 (
+        .clk(clk),
+        .a_addr(wgt_r_lo), .a_q(wgt_q_b0l),
+        .b_addr(wgt_r_hi), .b_q(wgt_q_b0h),
+        .we(wgt_wr & ~wgt_wbank), .w_addr(wgt_wint),
+        .w_data(wgt_wdata), .w_mask(wgt_wmask)
+    );
+    kwt_sram_2r1w #(.DW(WWGT), .AW(AW_WGTL), .SW(WB), .MASKW(64)) u_wgt_b1 (
+        .clk(clk),
+        .a_addr(wgt_r_lo), .a_q(wgt_q_b1l),
+        .b_addr(wgt_r_hi), .b_q(wgt_q_b1h),
+        .we(wgt_wr &  wgt_wbank), .w_addr(wgt_wint),
+        .w_data(wgt_wdata), .w_mask(wgt_wmask)
+    );
+
+    // c=0 -> b0.lo, c=1 -> b1.lo, c=2 -> b0.hi, c=3 -> b1.hi
+    wire [4*WWGT-1:0] wgt_flat = {wgt_q_b1h, wgt_q_b0h, wgt_q_b1l, wgt_q_b0l};
 
     // ------------------------------------------------------------------
     // control
@@ -142,17 +240,28 @@ module kwt_gemm_engine #(
     localparam S_FLUSH = 3'd5;
 
     reg [2:0]  state;
+    reg        flush_d;          // first drained group in S_FLUSH
 
     wire signed [31:0] acc0, acc1, acc2, acc3;
     wire               gemm_valid;
     wire               gemm_issue = (SEGS == 1) ? (state == S_PIPE)
                                                 : (state == S_ISSUE);
+
+    // The operand SRAMs return data one cycle after the address is presented,
+    // so the MAC enable and the output index each trail the issue by one more
+    // cycle than in the register-file version.
+    reg                issue_q;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) issue_q <= 1'b0;
+        else        issue_q <= gemm_issue;
+    end
+
     reg signed [31:0]  acc0_r, acc1_r, acc2_r, acc3_r;
 
     kwt_gemm4 #(.WB(WB)) u_gemm (
         .clk      (clk),
         .rst_n    (rst_n),
-        .valid_in (gemm_issue),
+        .valid_in (issue_q),
         .act_flat (act_flat),
         .wgt_flat (wgt_flat),
         .acc_in0  (acc0_r),
@@ -186,8 +295,11 @@ module kwt_gemm_engine #(
             seg_lat     <= 2'd0;
             t_pipe      <= 7'd0;
             g_pipe      <= 6'd0;
+            t_pipe_q    <= 7'd0;
+            g_pipe_q    <= 6'd0;
             t_out       <= 7'd0;
             g_out       <= 6'd0;
+            flush_d     <= 1'b0;
             acc0_r      <= 32'sd0;
             acc1_r      <= 32'sd0;
             acc2_r      <= 32'sd0;
@@ -207,8 +319,11 @@ module kwt_gemm_engine #(
                     seg_lat <= 2'd0;
                     t_pipe  <= 7'd0;
                     g_pipe  <= 6'd0;
+                    t_pipe_q <= 7'd0;
+                    g_pipe_q <= 6'd0;
                     t_out   <= 7'd0;
                     g_out   <= 6'd0;
+                    flush_d <= 1'b0;
                     acc0_r  <= 32'sd0;
                     acc1_r  <= 32'sd0;
                     acc2_r  <= 32'sd0;
@@ -227,8 +342,10 @@ module kwt_gemm_engine #(
                 // ---- single-segment fast path: one issue per cycle ----
                 S_PIPE: begin
                     cycle_count <= cycle_count + 32'd1;
-                    g_out <= g_pipe;
-                    t_out <= t_pipe;
+                    g_pipe_q <= g_pipe;
+                    t_pipe_q <= t_pipe;
+                    g_out <= g_pipe_q;
+                    t_out <= t_pipe_q;
                     if (gemm_valid) begin
                         out_we   <= 1'b1;
                         out_addr <= t_out*GROUPS + g_out;
@@ -249,14 +366,22 @@ module kwt_gemm_engine #(
 
                 S_FLUSH: begin
                     cycle_count <= cycle_count + 32'd1;
-                    g_out <= g_pipe;
-                    t_out <= t_pipe;
+                    g_pipe_q <= g_pipe;
+                    t_pipe_q <= t_pipe;
+                    g_out <= g_pipe_q;
+                    t_out <= t_pipe_q;
                     if (gemm_valid) begin
                         out_we   <= 1'b1;
                         out_addr <= t_out*GROUPS + g_out;
                         out_data <= {q3[OUT_BITS-1:0], q2[OUT_BITS-1:0],
                                      q1[OUT_BITS-1:0], q0[OUT_BITS-1:0]};
-                        state    <= S_DONE;
+                        // two issue stages are still in flight, so drain both
+                        if (flush_d) begin
+                            flush_d <= 1'b0;
+                            state   <= S_DONE;
+                        end else begin
+                            flush_d <= 1'b1;
+                        end
                     end
                 end
 

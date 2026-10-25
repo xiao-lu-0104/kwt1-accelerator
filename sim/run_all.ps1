@@ -33,7 +33,8 @@ $RTL = @(
     "..\rtl\kwt_encoder_12.v",
     "..\rtl\kwt_top.v",
     "..\rtl\kwt_axi_slave.v",
-    "..\rtl\kwt_axi_top.v"
+    "..\rtl\kwt_axi_top.v",
+    "..\rtl\kwt_sram_2r1w.v"
 )
 
 Set-Location $PSScriptRoot

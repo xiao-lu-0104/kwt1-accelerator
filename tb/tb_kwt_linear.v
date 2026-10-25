@@ -39,7 +39,10 @@ module tb_kwt_linear;
     ) dut (
         .clk(clk), .rst_n(rst_n), .start(start),
         .act_we(act_we), .act_addr(act_addr), .act_data(act_data),
+        .act_we4(1'b0), .act_data32(32'd0),
         .wgt_we(wgt_we), .wgt_addr(wgt_addr), .wgt_data(wgt_data),
+        .wgt_we16(1'b0), .wgt_data16(64'd0),
+        .wgt_we4(1'b0), .wgt_data_w4(32'd0),
         .bp_we(bp_we), .bp_addr(bp_addr), .bp_bias(bp_bias), .bp_m(bp_m),
         .out_we(out_we), .out_addr(out_addr), .out_data(out_data),
         .done(done), .cycle_count(cycle_count)
