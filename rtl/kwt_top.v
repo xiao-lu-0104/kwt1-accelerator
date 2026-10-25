@@ -19,6 +19,11 @@ module kwt_top #(
     input  wire               mf_we,
     input  wire [12:0]        mf_addr,      // token*64 + channel, 0..6271
     input  wire [7:0]         mf_data,
+    input  wire               mf_we4,
+    input  wire [9:0]         mf_word_addr, // 980 packed MFCC words
+    input  wire [31:0]        mf_data32,
+    input  wire [10:0]        act_rd_addr,
+    output wire [31:0]        act_rd_data,
 
     // patch projection parameters
     input  wire               pp_wgt_we,
@@ -92,6 +97,13 @@ module kwt_top #(
     reg [7:0]  cp_buf  [0:TACT-1];
     reg [7:0]  out_buf [0:TACT-1];
     reg [7:0]  hd_buf  [0:D-1];
+
+    wire [12:0] mf_byte_base = ((mf_word_addr / 10'd10) * 13'd64) +
+                               ((mf_word_addr % 10'd10) * 13'd4);
+    assign act_rd_data = {out_buf[{act_rd_addr,2'b11}],
+                          out_buf[{act_rd_addr,2'b10}],
+                          out_buf[{act_rd_addr,2'b01}],
+                          out_buf[{act_rd_addr,2'b00}]};
 
     // encoder activation write port
     reg         enc_x_we;
@@ -169,6 +181,7 @@ module kwt_top #(
     reg signed [7:0] best_val;
 
     integer m;
+    integer mf_lane;
     always @(*) begin
         best_idx = 4'd0;
         best_val = lg[0];
@@ -183,6 +196,10 @@ module kwt_top #(
     // ---------------- sequencing ----------------
     always @(posedge clk) begin
         if (mf_we)    act_buf[mf_addr < PACT ? mf_addr : 12'd0] <= mf_data;
+        if (mf_we4) begin
+            for (mf_lane = 0; mf_lane < 4; mf_lane = mf_lane + 1)
+                act_buf[mf_byte_base + mf_lane] <= mf_data32[mf_lane*8 +: 8];
+        end
         if (cp_we)    cp_buf[cp_addr] <= cp_data;
         if (pp_out_we && pp_out_addr < (PACT/4)) begin
             pp_buf[{pp_out_addr, 2'b00}] <= pp_out_data[7:0];

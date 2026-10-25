@@ -36,12 +36,13 @@ module tb_kwt_axi_slave;
     wire        mfcc_we;
     wire [10:0] frame_count;
 
-    wire [9:0]  act_rd_addr;
-    wire [31:0] act_rd_data = {act_rd_addr, 22'd0};
+    wire [10:0] act_rd_addr;
+    wire [31:0] act_rd_data = {act_rd_addr, 21'd0};
 
     integer errors = 0;
     integer i;
     reg [31:0] rd;
+    reg [1:0] last_bresp;
 
     // start must have pulsed high at least once
     reg saw_start = 0;
@@ -79,6 +80,7 @@ module tb_kwt_axi_slave;
             @(negedge aclk);
             wvalid = 0;
             while (!bvalid) @(posedge aclk);
+            last_bresp = bresp;
             @(negedge aclk);
         end
     endtask
@@ -103,14 +105,14 @@ module tb_kwt_axi_slave;
         repeat (2) @(posedge aclk);
 
         // ---- write MFCC words ----
-        for (i = 0; i < 8; i = i + 1)
+        for (i = 0; i < 980; i = i + 1)
             axi_write(16'h0100 + i * 4, 32'hA0B0_C000 + i);
 
-        if (frame_count !== 11'd8) begin
-            $display("FAIL: frame_count=%0d expect 8", frame_count);
+        if (frame_count !== 11'd980) begin
+            $display("FAIL: frame_count=%0d expect 980", frame_count);
             errors = errors + 1;
         end
-        for (i = 0; i < 8; i = i + 1) begin
+        for (i = 0; i < 980; i = i + 1) begin
             if (cap[i] !== (32'hA0B0_C000 + i)) begin
                 $display("FAIL: mfcc[%0d]=%08x", i, cap[i]);
                 errors = errors + 1;
@@ -149,18 +151,41 @@ module tb_kwt_axi_slave;
         end
 
         axi_read(16'h0010, rd);
-        if (rd !== 32'd8) begin
-            $display("FAIL: nframes=%08x expect 8", rd);
+        if (rd !== 32'd980) begin
+            $display("FAIL: nframes=%08x expect 980", rd);
             errors = errors + 1;
         end
 
         // ---- activation window read ----
-        // act_rd_addr = araddr[11:2], so 0x800 + 5*4 selects index 0x205
+        // Activation addresses are relative to the window base.
         axi_read(16'h0800 + 5 * 4, rd);
-        if (rd !== {10'h205, 22'd0}) begin
-            $display("FAIL: act[5]=%08x expect %08x", rd, {10'h205, 22'd0});
+        if (rd !== {11'd5, 21'd0}) begin
+            $display("FAIL: act[5]=%08x expect %08x", rd, {11'd5, 21'd0});
             errors = errors + 1;
         end
+
+        // Last encoder output word must be reachable without address wrap.
+        axi_read(16'h20bc, rd);
+        if (rd !== {11'd1583, 21'd0}) errors = errors + 1;
+
+        // Zero strobes are a no-op; partial MFCC writes must be rejected.
+        wstrb = 0;
+        axi_write(16'h0100, 0);
+        if (last_bresp !== 0 || frame_count !== 980) errors = errors + 1;
+        wstrb = 1;
+        axi_write(16'h0100, 0);
+        if (last_bresp !== 2 || frame_count !== 980) errors = errors + 1;
+        wstrb = 4'hf;
+        axi_write(16'h1050, 0); // one past the MFCC window
+        if (last_bresp !== 2 || frame_count !== 980) errors = errors + 1;
+        axi_write(16'h0101, 0); // unaligned
+        if (last_bresp !== 2 || frame_count !== 980) errors = errors + 1;
+        wstrb = 4'h2;
+        axi_write(0, 1); // CTRL low byte disabled
+        if (saw_start) errors = errors + 1;
+        wstrb = 4'hf;
+        axi_write(0, 2);
+        if (frame_count !== 0) errors = errors + 1;
 
         // ---- start pulse ----
         axi_write(16'h0000, 32'h0000_0001);

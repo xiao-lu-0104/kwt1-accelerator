@@ -6,12 +6,12 @@
 - 量化：权重 int4（per-output-channel），激活 int8
 - 目标：150 MHz，面积 ≤ 2.25 mm²，Top-1 下降 ≤ 2 pp
 - **实测：定点精度 96.17 %（浮点 97.33 %，下降 1.17 pp）**
-- **实测：单帧推理 1,477,755 周期 = 9.85 ms @150 MHz**（含参数装载，较初版 35.5 ms 优化 -72.3 %）
+- **本地 RTL 仿真（尚未计入真实平台总线等待和 E203 调度）：单帧推理 1,477,755 周期 = 9.85 ms @150 MHz**（含参数装载，较初版 35.5 ms 优化 -72.3 %）
 
 ## 目录结构
 
 ```
-rtl/            18 个可综合模块（已验证 bit-exact）
+rtl/            20 个可综合模块（计算路径已验证 bit-exact）
   kwt_dot64.v           64 点积（int8 × int4 → int32）
   kwt_gemm4.v           4 通道并行 MAC（256 MAC/cycle）
   kwt_gemm_engine.v     通用 GEMM 引擎（参数化 IN/OUT/TOKENS/WB）
@@ -31,6 +31,7 @@ rtl/            18 个可综合模块（已验证 bit-exact）
   kwt_encoder_12.v      12 层调度 + 参数 ROM 切换
   kwt_top.v             整机（MFCC → patch_proj → 12 层 → head → argmax）
   kwt_axi_slave.v       AXI4-Lite 从机包装（寄存器映射见 doc/08）
+  kwt_axi_top.v         AXI 从机与计算顶层集成壳（参数存储由平台侧提供）
 
 tb/             15 个 testbench（逐位比对，无容差）
 tools/          数值模型、标定、向量生成器
@@ -116,4 +117,4 @@ MFCC 98×40 int8 (s=2.752)
 | 任务 3：SoC 集成 + E203 驱动 | 等组委会下发 SoC 平台工程（AXI 互连、存储映射） |
 | 任务 7：综合、时序、面积、功耗 | 等组委会下发标准单元库与 SRAM macro |
 
-这两项的接口已在 `kwt_top.v` 中按 AXI-4 从机 + 参数 ROM 的形式预留。
+`kwt_axi_top` 已完成 AXI MFCC 拆包、启动/状态和结果读回到 `kwt_top` 的连接；组委会 E203 总线环境、软件驱动和参数加载接口仍待平台工程接入。内部多读口数组也尚需映射到题目允许的单/双端口 SRAM bank。详见 `doc/09_综合与时序.md` 与 `doc/11_优化复核.md`。

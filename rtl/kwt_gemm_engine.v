@@ -184,6 +184,10 @@ module kwt_gemm_engine #(
             t_lat       <= 7'd0;
             g_lat       <= 6'd0;
             seg_lat     <= 2'd0;
+            t_pipe      <= 7'd0;
+            g_pipe      <= 6'd0;
+            t_out       <= 7'd0;
+            g_out       <= 6'd0;
             acc0_r      <= 32'sd0;
             acc1_r      <= 32'sd0;
             acc2_r      <= 32'sd0;

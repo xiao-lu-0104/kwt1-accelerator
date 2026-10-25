@@ -44,3 +44,6 @@ release/
 *.swp
 Thumbs.db
 desktop.ini
+
+# Simulator work libraries (also generated when invoked from repository root)
+xsim.dir/

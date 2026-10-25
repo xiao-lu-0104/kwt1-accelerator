@@ -32,33 +32,39 @@ $RTL = @(
     "..\rtl\kwt_encoder_layer.v",
     "..\rtl\kwt_encoder_12.v",
     "..\rtl\kwt_top.v",
-    "..\rtl\kwt_axi_slave.v"
+    "..\rtl\kwt_axi_slave.v",
+    "..\rtl\kwt_axi_top.v"
 )
 
-function Clear-XsimLock {
-    Get-Process | Where-Object { $_.ProcessName -like '*xsim*' } |
-        Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 300
+Set-Location $PSScriptRoot
+function Invoke-Checked {
+    param([string]$Tool, [string[]]$ToolArgs)
+    $output = & $Tool @ToolArgs 2>&1
+    $code = $LASTEXITCODE
+    $output | ForEach-Object { Write-Host $_ }
+    if ($code -ne 0) { throw "$Tool failed (exit $code)" }
+    return $output
 }
 
 function Run-Test {
     param([string]$Tb, [string]$Snap, [string]$Pattern = "PASS:|FAIL:")
-    Clear-XsimLock
-    Remove-Item -Recurse -Force "xsim.dir\$Snap" -ErrorAction SilentlyContinue
     Write-Host "`n=== $Tb ===" -ForegroundColor Cyan
-    & $XELAB $Tb -s $Snap --debug typical 2>&1 | Select-String "ERROR" | Select-Object -First 3
-    & $XSIM $Snap -R 2>&1 | Select-String -Pattern $Pattern
+    $null = Invoke-Checked $XELAB @($Tb, "-s", $Snap, "--debug", "typical")
+    $output = Invoke-Checked $XSIM @($Snap, "-R")
+    if (($output -match 'FAIL:|ERROR:|MISMATCH') -or -not ($output -match 'PASS:')) {
+        throw "$Tb did not pass"
+    }
 }
 
 # ---------------------------------------------------------------- vectors
 if (-not $SkipVectors) {
     Write-Host "Generating vectors..." -ForegroundColor Cyan
     Push-Location ..
-    & $PY tools\calibrate.py            | Select-Object -Last 1
-    & $PY tools\gen_attention_vectors.py
-    & $PY tools\gen_encoder_vectors.py
-    & $PY tools\gen_encoder12_vectors.py
-    & $PY tools\gen_top_vectors.py
+    foreach ($generator in @("calibrate.py", "gen_attention_vectors.py",
+                              "gen_encoder_vectors.py", "gen_encoder12_vectors.py",
+                              "gen_top_vectors.py")) {
+        $null = Invoke-Checked $PY @("tools\$generator")
+    }
     Pop-Location
 }
 
@@ -67,11 +73,15 @@ Write-Host "`nCompiling RTL..." -ForegroundColor Cyan
 $tb = if ($OnlyTop) { @("..\tb\tb_kwt_top.v") }
       else { @("..\tb\tb_kwt_attention.v", "..\tb\tb_kwt_encoder_layer.v",
                "..\tb\tb_kwt_encoder_12.v", "..\tb\tb_kwt_top.v",
-               "..\tb\tb_kwt_axi_slave.v") }
-& $XVLOG -sv @RTL @tb 2>&1 | Select-String "ERROR" | Select-Object -First 5
+               "..\tb\tb_kwt_axi_slave.v", "..\tb\tb_kwt_dot64_tree.v",
+               "..\tb\tb_kwt_mfcc_map.v", "..\tb\tb_kwt_axi_top_load.v") }
+$null = Invoke-Checked $XVLOG (@("-sv") + $RTL + $tb)
 
 # ---------------------------------------------------------------- simulate
 if (-not $OnlyTop) {
+    Run-Test "tb_kwt_dot64_tree" "dot_tree_snap"
+    Run-Test "tb_kwt_mfcc_map" "mfcc_map_snap"
+    Run-Test "tb_kwt_axi_top_load" "axi_top_load_snap"
     Run-Test "tb_kwt_attention"     "attn_snap"  "PASS:|FAIL:|cycles="
     Run-Test "tb_kwt_encoder_layer" "enc_snap"   "PASS:|FAIL:|cycles="
     Run-Test "tb_kwt_encoder_12"    "enc12_snap" "PASS:|FAIL:|cycles="
