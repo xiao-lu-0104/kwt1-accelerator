@@ -76,12 +76,16 @@ module kwt_gemm_engine #(
     // array is used anywhere.
     // ------------------------------------------------------------------
     localparam AGRP    = 16;                    // int8 per activation word
-    localparam AWD     = TOTAL_ACT / AGRP;
-    localparam AW_ACTL = $clog2(AWD);
+    localparam AWD     = TOTAL_ACT / AGRP;      // activation words total
+    localparam AWD_BK  = AWD / 2;               // words per bank
+    localparam AW_ACTG = $clog2(AWD);           // global word address width
+    localparam AW_ACTL = $clog2(AWD_BK);        // bank-internal address width
     localparam WGRP    = 64;                    // elements per weight word
     localparam WWGT    = WGRP * WB;
-    localparam AWDW    = TOTAL_WGT / WGRP;
-    localparam AW_WGTL = $clog2(AWDW);
+    localparam AWDW    = TOTAL_WGT / WGRP;      // weight words total
+    localparam AWDW_BK = AWDW / 2;              // words per bank
+    localparam AW_WGTG = $clog2(AWDW);
+    localparam AW_WGTL = $clog2(AWDW_BK);
     localparam KPG     = IN_DIM / 64;           // weight words per channel/segment
     localparam LOG2_IN = $clog2(IN_DIM);
     localparam LOG2_K  = $clog2(KPG);
@@ -104,7 +108,6 @@ module kwt_gemm_engine #(
     wire [3:0]         act_w_lane = act_addr[3:0];
     wire               act_w_bank = act_addr[4];
     wire               act_wr     = act_we | act_we4;
-
     reg  [127:0]       act_wdata;
     reg  [15:0]        act_wmask;
     always @(*) begin
@@ -181,25 +184,30 @@ module kwt_gemm_engine #(
     // ---- four parallel operand reads from two 2R1W banks each ----
     // act word base is a multiple of four, so bank = word bit0 gives two
     // distinct internal addresses per bank for the four requested words
-    wire [AW_ACTL-1:0] act_r_base = t_issel*(IN_DIM/AGRP) + seg_lat*4;
+    wire [AW_ACTG-1:0] act_r_base = t_issel*(IN_DIM/AGRP) + seg_lat*4;
     wire [AW_ACTL-1:0] act_r_lo   = act_r_base >> 1;
     wire [AW_ACTL-1:0] act_r_hi   = (act_r_base >> 1) + 1'b1;
 
+    // port A is bidirectional: load cycles present the write address, compute
+    // cycles present the read address.  Port B only ever reads.
+    wire [AW_ACTL-1:0] act_b0a_addr = act_wr ? act_w_word : act_r_lo;
+    wire [AW_ACTL-1:0] act_b0b_addr = act_wr ? act_w_word : act_r_hi;
+    wire [AW_ACTL-1:0] act_b1a_addr = act_wr ? act_w_word : act_r_lo;
+    wire [AW_ACTL-1:0] act_b1b_addr = act_wr ? act_w_word : act_r_hi;
+
     wire [127:0] act_q_b0l, act_q_b0h, act_q_b1l, act_q_b1h;
 
-    kwt_sram_2r1w #(.DW(128), .AW(AW_ACTL), .SW(8), .MASKW(16)) u_act_b0 (
+    kwt_sram_2p #(.DW(128), .AW(AW_ACTL), .DEPTH(AWD_BK), .SW(8), .MASKW(16)) u_act_b0 (
         .clk(clk),
-        .a_addr(act_r_lo), .a_q(act_q_b0l),
-        .b_addr(act_r_hi), .b_q(act_q_b0h),
-        .we(act_wr & ~act_w_bank), .w_addr(act_w_word),
-        .w_data(act_wdata), .w_mask(act_wmask)
+        .a_addr(act_b0a_addr), .a_q(act_q_b0l),
+        .a_we(act_wr & ~act_w_bank), .a_wdata(act_wdata), .a_mask(act_wmask),
+        .b_addr(act_b0b_addr), .b_q(act_q_b0h)
     );
-    kwt_sram_2r1w #(.DW(128), .AW(AW_ACTL), .SW(8), .MASKW(16)) u_act_b1 (
+    kwt_sram_2p #(.DW(128), .AW(AW_ACTL), .DEPTH(AWD_BK), .SW(8), .MASKW(16)) u_act_b1 (
         .clk(clk),
-        .a_addr(act_r_lo), .a_q(act_q_b1l),
-        .b_addr(act_r_hi), .b_q(act_q_b1h),
-        .we(act_wr &  act_w_bank), .w_addr(act_w_word),
-        .w_data(act_wdata), .w_mask(act_wmask)
+        .a_addr(act_b1a_addr), .a_q(act_q_b1l),
+        .a_we(act_wr &  act_w_bank), .a_wdata(act_wdata), .a_mask(act_wmask),
+        .b_addr(act_b1b_addr), .b_q(act_q_b1h)
     );
 
     // k=0 -> b0.lo, k=1 -> b1.lo, k=2 -> b0.hi, k=3 -> b1.hi
@@ -209,21 +217,24 @@ module kwt_gemm_engine #(
     wire [AW_WGTL-1:0] wgt_r_lo = g_issel*(2*KPG) + seg_lat;
     wire [AW_WGTL-1:0] wgt_r_hi = wgt_r_lo + KPG;
 
+    wire [AW_WGTL-1:0] wgt_b0a_addr = wgt_wr ? wgt_wint : wgt_r_lo;
+    wire [AW_WGTL-1:0] wgt_b0b_addr = wgt_wr ? wgt_wint : wgt_r_hi;
+    wire [AW_WGTL-1:0] wgt_b1a_addr = wgt_wr ? wgt_wint : wgt_r_lo;
+    wire [AW_WGTL-1:0] wgt_b1b_addr = wgt_wr ? wgt_wint : wgt_r_hi;
+
     wire [WWGT-1:0] wgt_q_b0l, wgt_q_b0h, wgt_q_b1l, wgt_q_b1h;
 
-    kwt_sram_2r1w #(.DW(WWGT), .AW(AW_WGTL), .SW(WB), .MASKW(64)) u_wgt_b0 (
+    kwt_sram_2p #(.DW(WWGT), .AW(AW_WGTL), .DEPTH(AWDW_BK), .SW(WB), .MASKW(64)) u_wgt_b0 (
         .clk(clk),
-        .a_addr(wgt_r_lo), .a_q(wgt_q_b0l),
-        .b_addr(wgt_r_hi), .b_q(wgt_q_b0h),
-        .we(wgt_wr & ~wgt_wbank), .w_addr(wgt_wint),
-        .w_data(wgt_wdata), .w_mask(wgt_wmask)
+        .a_addr(wgt_b0a_addr), .a_q(wgt_q_b0l),
+        .a_we(wgt_wr & ~wgt_wbank), .a_wdata(wgt_wdata), .a_mask(wgt_wmask),
+        .b_addr(wgt_b0b_addr), .b_q(wgt_q_b0h)
     );
-    kwt_sram_2r1w #(.DW(WWGT), .AW(AW_WGTL), .SW(WB), .MASKW(64)) u_wgt_b1 (
+    kwt_sram_2p #(.DW(WWGT), .AW(AW_WGTL), .DEPTH(AWDW_BK), .SW(WB), .MASKW(64)) u_wgt_b1 (
         .clk(clk),
-        .a_addr(wgt_r_lo), .a_q(wgt_q_b1l),
-        .b_addr(wgt_r_hi), .b_q(wgt_q_b1h),
-        .we(wgt_wr &  wgt_wbank), .w_addr(wgt_wint),
-        .w_data(wgt_wdata), .w_mask(wgt_wmask)
+        .a_addr(wgt_b1a_addr), .a_q(wgt_q_b1l),
+        .a_we(wgt_wr &  wgt_wbank), .a_wdata(wgt_wdata), .a_mask(wgt_wmask),
+        .b_addr(wgt_b1b_addr), .b_q(wgt_q_b1h)
     );
 
     // c=0 -> b0.lo, c=1 -> b1.lo, c=2 -> b0.hi, c=3 -> b1.hi

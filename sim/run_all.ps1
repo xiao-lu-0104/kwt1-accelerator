@@ -34,7 +34,7 @@ $RTL = @(
     "..\rtl\kwt_top.v",
     "..\rtl\kwt_axi_slave.v",
     "..\rtl\kwt_axi_top.v",
-    "..\rtl\kwt_sram_2r1w.v"
+    "..\rtl\kwt_sram_2p.v"
 )
 
 Set-Location $PSScriptRoot

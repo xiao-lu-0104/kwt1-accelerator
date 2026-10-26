@@ -47,6 +47,7 @@ module tb_kwt_encoder_layer;
         .x_we(x_we), .x_addr(x_addr), .x_data(x_data),
         .p_wgt_we(p_wgt_we), .p_wgt_sel(p_wgt_sel),
         .p_wgt_addr(p_wgt_addr), .p_wgt_data(p_wgt_data),
+        .p_wgt_we16(1'b0), .p_wgt_data16(64'd0),
         .p_bp_we(p_bp_we), .p_bp_sel(p_bp_sel), .p_bp_addr(p_bp_addr),
         .p_bp_bias(p_bp_bias), .p_bp_m(p_bp_m),
         .p_ln_we(p_ln_we), .p_ln_sel(p_ln_sel), .p_ln_addr(p_ln_addr),
