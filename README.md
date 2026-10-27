@@ -2,6 +2,18 @@
 
 面向 2026 嵌入式芯片与系统设计竞赛 · 芯片设计赛道（研究生组）的 RTL 实现。
 
+**2026-10-27 更新：** 十二层调度器默认启用紧凑版 encoder，共享 64 路矩阵乘法、
+按行处理注意力/FFN/LayerNorm，并使用 16-bit 同步 SRAM 接口。
+V2 已重叠 MAC/量化流水并合并 K/V，使用 37 个合法规格 SRAM 宏，容量 80 KiB。
+当前又加入 LN/MAC/量化/残差时序流水和四路 Softmax；比赛 encoder 顶层
+FPGA 综合为 18,083 FF、17,069 LUT、29 DSP。
+150 MHz 下寄存器间最差 slack 为 +0.712 ns；带 FPGA 引脚缓冲的整体 WNS
+仍为 -1.924 ns（输出接口）。ASIC 2.25 mm² 面积需待指定工艺库核验。
+不插入 FPGA 引脚缓冲的模块综合（`-ooc`）WNS 为 +0.817 ns，setup/hold 无违例。
+当前周期、资源、时序边界与复现方法见 [LN 时序与四路 Softmax](doc/16_LN时序与四路Softmax.md)；
+SRAM 宏清单及 V2 历史结果见 [MAC 流水与 K/V 合并](doc/15_MAC流水与KV合并.md)。
+下文 9.85 ms 等历史性能记录属于旧版配置，不适用于当前默认紧凑版。
+
 - 模型：KWT-1（`d_model=64`, `mlp_dim=256`, 12 层 PostNorm Encoder, 99 token）
 - 量化：权重 int4（per-output-channel），激活 int8
 - 目标：150 MHz，面积 ≤ 2.25 mm²，Top-1 下降 ≤ 2 pp

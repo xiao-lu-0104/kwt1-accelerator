@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-module tb_kwt_encoder_12;
+module tb_kwt_encoder_12 #(parameter COMPACT=1);
     localparam TOK = 99;
     localparam D = 64;
     localparam FF = 256;
@@ -76,7 +76,7 @@ module tb_kwt_encoder_12;
     wire signed [15:0] rom_ln_gamma = (ld_sel == 4'd10 || ld_sel == 4'd11) ? $signed(lgrom[lidx]) : 16'sd0;
     wire signed [15:0] rom_ln_beta  = (ld_sel == 4'd10 || ld_sel == 4'd11) ? $signed(lbrom[lidx]) : 16'sd0;
 
-    kwt_encoder_12 dut (
+    kwt_encoder_12 #(.COMPACT(COMPACT)) dut (
         .clk(clk), .rst_n(rst_n), .start(start),
         .x_we(x_we), .x_addr(x_addr), .x_data(x_data),
         .cur_layer(cur_layer), .ld_sel(ld_sel), .ld_addr(ld_addr),
@@ -92,6 +92,11 @@ module tb_kwt_encoder_12;
 
     integer i, errors, timeout, got;
     integer ld_seen, st_cnt, nstart, ndone;
+    integer mac_issues=0;
+    generate if(COMPACT) begin: g_profile
+        always @(posedge clk) if(rst_n&&dut.g_compact.u_enc.mac_issue)
+            mac_issues=mac_issues+1;
+    end endgenerate
     reg [3:0] last_st = 4'd0;
     reg [3:0] last_L = 4'd15;
 
@@ -106,14 +111,6 @@ module tb_kwt_encoder_12;
             cap[out_addr] = out_data;
             got = got + 1;
         end
-    end
-
-    reg [4:0] last_es = 5'd0;
-    integer es_cnt = 0;
-    always @(negedge clk) if (dut.u_enc.state !== last_es) begin
-        if (es_cnt < 20) $display("    enc st %0d->%0d @%0d", last_es, dut.u_enc.state, cycle_count);
-        last_es = dut.u_enc.state;
-        es_cnt = es_cnt + 1;
     end
 
     integer xf_dbg = 0;
@@ -154,11 +151,6 @@ module tb_kwt_encoder_12;
         end
         @(negedge clk); x_we = 0;
         @(negedge clk);
-        $display("  after x load: xhold[0..3]=%0d %0d %0d %0d mem=%0d %0d",
-                 $signed(dut.xhold[0]), $signed(dut.xhold[1]),
-                 $signed(dut.xhold[2]), $signed(dut.xhold[3]),
-                 $signed(xm_mem[0]), $signed(xm_mem[1]));
-
         @(negedge clk); start = 1;
         timeout = 0;
         while (!done && timeout < 12000000) begin
@@ -174,55 +166,14 @@ module tb_kwt_encoder_12;
         end
         $display("cycles=%0d outputs=%0d (expect %0d) starts=%0d dones=%0d", cycle_count, got, TACT, nstart, ndone);
         $display("  -- %.2f ms @150MHz", cycle_count / 150000.0);
-        $display("  xhold[0..3]=%0d %0d %0d %0d",
-                 $signed(dut.xhold[0]), $signed(dut.xhold[1]),
-                 $signed(dut.xhold[2]), $signed(dut.xhold[3]));
-        $display("  enc x_buf[0..3]=%0d %0d %0d %0d",
-                 $signed(dut.u_enc.x_buf[0]), $signed(dut.u_enc.x_buf[1]),
-                 $signed(dut.u_enc.x_buf[2]), $signed(dut.u_enc.x_buf[3]));
-        $display("  enc o_buf[0..3]=%0d %0d %0d %0d",
-                 $signed(dut.u_enc.o_buf[0]), $signed(dut.u_enc.o_buf[1]),
-                 $signed(dut.u_enc.o_buf[2]), $signed(dut.u_enc.o_buf[3]));
-        $display("  x1[0..3]=%0d %0d %0d %0d  h[0..3]=%0d %0d %0d %0d  f[0..3]=%0d %0d %0d %0d",
-                 $signed(dut.u_enc.x1_buf[0]), $signed(dut.u_enc.x1_buf[1]),
-                 $signed(dut.u_enc.x1_buf[2]), $signed(dut.u_enc.x1_buf[3]),
-                 $signed(dut.u_enc.h_buf[0]), $signed(dut.u_enc.h_buf[1]),
-                 $signed(dut.u_enc.h_buf[2]), $signed(dut.u_enc.h_buf[3]),
-                 $signed(dut.u_enc.f_buf[0]), $signed(dut.u_enc.f_buf[1]),
-                 $signed(dut.u_enc.f_buf[2]), $signed(dut.u_enc.f_buf[3]));
-        $display("  r2[0..3]=%0d %0d %0d %0d",
-                 $signed(dut.u_enc.r2_buf[0]), $signed(dut.u_enc.r2_buf[1]),
-                 $signed(dut.u_enc.r2_buf[2]), $signed(dut.u_enc.r2_buf[3]));
-        $display("  ln_g[0][0..3]=%0d %0d %0d %0d  ln_g[1][0]=%0d",
-                 $signed(dut.u_enc.ln_g[0][0]), $signed(dut.u_enc.ln_g[0][1]),
-                 $signed(dut.u_enc.ln_g[0][2]), $signed(dut.u_enc.ln_g[0][3]),
-                 $signed(dut.u_enc.ln_g[1][0]));
-        $display("  ffn1 wgt[0..3]=%0d %0d %0d %0d  m[0]=%0d",
-                 $signed(dut.u_enc.u_ffn1.wgt_buf[0]), $signed(dut.u_enc.u_ffn1.wgt_buf[1]),
-                 $signed(dut.u_enc.u_ffn1.wgt_buf[2]), $signed(dut.u_enc.u_ffn1.wgt_buf[3]),
-                 $signed(dut.u_enc.u_ffn1.m_buf[0]));
-        $display("  q wgt[0..3]=%0d %0d %0d %0d  qm[0]=%0d om[0]=%0d",
-                 $signed(dut.u_enc.u_attn.u_qkv.u_q.wgt_buf[0]),
-                 $signed(dut.u_enc.u_attn.u_qkv.u_q.wgt_buf[1]),
-                 $signed(dut.u_enc.u_attn.u_qkv.u_q.wgt_buf[2]),
-                 $signed(dut.u_enc.u_attn.u_qkv.u_q.wgt_buf[3]),
-                 $signed(dut.u_enc.u_attn.u_qkv.u_q.m_buf[0]),
-                 $signed(dut.u_enc.u_attn.u_oproj.m_buf[0]));
-        $display("  attn q_buf[0..3]=%0d %0d %0d %0d  score[0..3]=%0d %0d %0d %0d  p[0..3]=%0d %0d %0d %0d",
-                 $signed(dut.u_enc.u_attn.q_buf[0]), $signed(dut.u_enc.u_attn.q_buf[1]),
-                 $signed(dut.u_enc.u_attn.q_buf[2]), $signed(dut.u_enc.u_attn.q_buf[3]),
-                 $signed(dut.u_enc.u_attn.score_buf[0]), $signed(dut.u_enc.u_attn.score_buf[1]),
-                 $signed(dut.u_enc.u_attn.score_buf[2]), $signed(dut.u_enc.u_attn.score_buf[3]),
-                 $signed(dut.u_enc.u_attn.p_buf[0]), $signed(dut.u_enc.u_attn.p_buf[1]),
-                 $signed(dut.u_enc.u_attn.p_buf[2]), $signed(dut.u_enc.u_attn.p_buf[3]));
-        $display("  enc x_buf[0..3]=%0d %0d %0d %0d  q act[0..3]=%0d %0d %0d %0d",
-                 $signed(dut.u_enc.x_buf[0]), $signed(dut.u_enc.x_buf[1]),
-                 $signed(dut.u_enc.x_buf[2]), $signed(dut.u_enc.x_buf[3]),
-                 $signed(dut.u_enc.u_attn.u_qkv.u_q.act_buf[0]),
-                 $signed(dut.u_enc.u_attn.u_qkv.u_q.act_buf[1]),
-                 $signed(dut.u_enc.u_attn.u_qkv.u_q.act_buf[2]),
-                 $signed(dut.u_enc.u_attn.u_qkv.u_q.act_buf[3]));
-
+        if(COMPACT) begin
+            $display("PROFILE encoder_MAC_issues=%0d useful_MACs=73446912 useful_util_pct=%.3f issue_util_pct=%.3f",
+                mac_issues,100.0*73446912/(64.0*cycle_count),100.0*mac_issues/cycle_count);
+            if(mac_issues!=1183248) begin
+                $display("FAIL: unexpected encoder issued-work count");
+                errors=errors+1;
+            end
+        end
         repeat (5) @(negedge clk);
         if (got != TACT) begin
             $display("FAIL: output count");

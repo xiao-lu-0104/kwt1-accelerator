@@ -10,7 +10,8 @@
 //   p[i]  = (e[i] * inv) >> 20          (<= 127 by construction)
 module kwt_softmax #(
     parameter N  = 99,
-    parameter AW = 7
+    parameter AW = 7,
+    parameter SERIAL_DIV = 0
 )(
     input  wire               clk,
     input  wire               rst_n,
@@ -63,9 +64,17 @@ module kwt_softmax #(
     localparam S_INV  = 3'd3;
     localparam S_MUL  = 3'd4;
     localparam S_DONE = 3'd5;
+    localparam S_DIV  = 3'd6;
 
     reg [2:0]  state;
     reg [31:0] sum_r;
+    reg [26:0] div_q;
+    reg [31:0] div_rem;
+    reg [4:0] div_left;
+    wire [32:0] div_trial={div_rem,div_q[26]};
+    wire div_take=(div_trial>={1'b0,sum_r});
+    wire [32:0] div_sub=div_trial-{1'b0,sum_r};
+    wire [26:0] div_next={div_q[25:0],div_take};
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -79,6 +88,7 @@ module kwt_softmax #(
             out_data    <= 8'd0;
             done        <= 1'b0;
             cycle_count <= 32'd0;
+            div_q<=0; div_rem<=0; div_left<=0;
         end else begin
             out_we      <= 1'b0;
             cycle_count <= cycle_count + 32'd1;
@@ -119,12 +129,28 @@ module kwt_softmax #(
 
                 // pass 3: reciprocal (single division)
                 S_INV: begin
-                    if (sum_r == 32'd0)
+                    if (sum_r == 32'd0) begin
                         inv_r <= 32'd0;
-                    else
+                        state <= S_MUL;
+                    end else if(SERIAL_DIV) begin
+                        div_q<=27'd133169152; // 127 << 20
+                        div_rem<=0;
+                        div_left<=26;
+                        state<=S_DIV;
+                    end else begin
                         inv_r <= (32'd127 << 20) / sum_r;
+                        state <= S_MUL;
+                    end
                     idx   <= {AW{1'b0}};
-                    state <= S_MUL;
+                end
+
+                S_DIV: begin
+                    div_rem<=div_take?div_sub[31:0]:div_trial[31:0];
+                    div_q<=div_next;
+                    if(div_left==0) begin
+                        inv_r<={5'd0,div_next};
+                        state<=S_MUL;
+                    end else div_left<=div_left-1'b1;
                 end
 
                 // pass 4: multiply and stream out

@@ -51,3 +51,8 @@ xsim.dir/
 # local pre-refactor backups
 rtl_pre_sram/
 tb_pre_sram/
+
+# ---------------------------------------------------------------- Vivado synthesis output
+# 每个目录含 28~30 MB 的 .dcp，可随时用 syn/run_*.tcl 重新生成
+syn/out/
+syn/compact_*/

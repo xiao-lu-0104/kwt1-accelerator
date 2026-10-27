@@ -1,0 +1,307 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2022.2 (win64) Build 3671981 Fri Oct 14 05:00:03 MDT 2022
+| Date         : Tue Oct 27 13:22:32 2026
+| Host         : LAPTOP-MM1041TQ running 64-bit major release  (build 9200)
+| Command      : report_timing -to [get_cells -hierarchical -filter {IS_SEQUENTIAL == 1 && NAME =~ *g_sm4.u_sm/*}] -max_paths 3 -file E:/chipdesign/syn/hotspots_to_sm.rpt
+| Design       : kwt_encoder_12
+| Device       : 7a100t-fgg484
+| Speed File   : -2  PRODUCTION 1.23 2018-06-13
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Timing Report
+
+Slack (MET) :             1.669ns  (required time - arrival time)
+  Source:                 g_compact.u_enc/g_sm4.u_sm/sum_r_reg[1]/C
+                            (rising edge-triggered cell FDCE clocked by clk  {rise@0.000ns fall@3.333ns period=6.667ns})
+  Destination:            g_compact.u_enc/g_sm4.u_sm/div_rem_reg[30]/D
+                            (rising edge-triggered cell FDCE clocked by clk  {rise@0.000ns fall@3.333ns period=6.667ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            6.667ns  (clk rise@6.667ns - clk rise@0.000ns)
+  Data Path Delay:        4.861ns  (logic 3.532ns (72.660%)  route 1.329ns (27.340%))
+  Logic Levels:           16  (CARRY4=13 LUT2=1 LUT3=1 LUT4=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    1.904ns = ( 8.571 - 6.667 ) 
+    Source Clock Delay      (SCD):    2.217ns
+    Clock Pessimism Removal (CPR):    0.167ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk
+                         IBUF (Prop_ibuf_I_O)         0.904     0.904 r  clk_IBUF_inst/O
+                         net (fo=1, unplaced)         0.647     1.552    clk_IBUF
+                         BUFG (Prop_bufg_I_O)         0.081     1.633 r  clk_IBUF_BUFG_inst/O
+                         net (fo=18411, unplaced)     0.584     2.217    g_compact.u_enc/g_sm4.u_sm/clk_IBUF_BUFG
+                         FDCE                                         r  g_compact.u_enc/g_sm4.u_sm/sum_r_reg[1]/C
+  -------------------------------------------------------------------    -------------------
+                         FDCE (Prop_fdce_C_Q)         0.397     2.614 f  g_compact.u_enc/g_sm4.u_sm/sum_r_reg[1]/Q
+                         net (fo=6, unplaced)         0.657     3.271    g_compact.u_enc/g_sm4.u_sm/sum_r[1]
+                         LUT4 (Prop_lut4_I1_O)        0.252     3.523 r  g_compact.u_enc/g_sm4.u_sm/div_q[0]_i_35/O
+                         net (fo=1, unplaced)         0.000     3.523    g_compact.u_enc/g_sm4.u_sm/div_q[0]_i_35_n_0
+                         CARRY4 (Prop_carry4_DI[0]_CO[3])
+                                                      0.477     4.000 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_23/CO[3]
+                         net (fo=1, unplaced)         0.000     4.000    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_23_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     4.100 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_14/CO[3]
+                         net (fo=1, unplaced)         0.000     4.100    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_14_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     4.200 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_5/CO[3]
+                         net (fo=1, unplaced)         0.000     4.200    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_5_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     4.300 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_3/CO[3]
+                         net (fo=1, unplaced)         0.000     4.300    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_3_n_0
+                         CARRY4 (Prop_carry4_CI_CO[0])
+                                                      0.238     4.538 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_2/CO[0]
+                         net (fo=34, unplaced)        0.313     4.851    g_compact.u_enc/g_sm4.u_sm/take
+                         LUT3 (Prop_lut3_I2_O)        0.297     5.148 r  g_compact.u_enc/g_sm4.u_sm/div_rem[2]_i_5/O
+                         net (fo=1, unplaced)         0.000     5.148    g_compact.u_enc/g_sm4.u_sm/div_rem[2]_i_5_n_0
+                         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.444     5.592 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[2]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.592    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[2]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.692 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[6]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.692    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[6]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.792 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[10]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.792    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[10]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.892 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[14]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.892    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[14]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.992 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[18]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.992    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[18]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     6.092 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[22]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     6.092    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[22]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     6.192 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[26]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     6.192    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[26]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_O[3])
+                                                      0.277     6.469 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[30]_i_2/O[3]
+                         net (fo=1, unplaced)         0.359     6.828    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[30]_i_2_n_4
+                         LUT2 (Prop_lut2_I1_O)        0.250     7.078 r  g_compact.u_enc/g_sm4.u_sm/div_rem[30]_i_1/O
+                         net (fo=1, unplaced)         0.000     7.078    g_compact.u_enc/g_sm4.u_sm/div_rem[30]_i_1_n_0
+                         FDCE                                         r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[30]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)        6.667     6.667 r  
+                                                      0.000     6.667 r  clk (IN)
+                         net (fo=0)                   0.000     6.667    clk
+                         IBUF (Prop_ibuf_I_O)         0.773     7.440 r  clk_IBUF_inst/O
+                         net (fo=1, unplaced)         0.615     8.055    clk_IBUF
+                         BUFG (Prop_bufg_I_O)         0.077     8.132 r  clk_IBUF_BUFG_inst/O
+                         net (fo=18411, unplaced)     0.439     8.571    g_compact.u_enc/g_sm4.u_sm/clk_IBUF_BUFG
+                         FDCE                                         r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[30]/C
+                         clock pessimism              0.167     8.739    
+                         clock uncertainty           -0.035     8.703    
+                         FDCE (Setup_fdce_C_D)        0.043     8.746    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[30]
+  -------------------------------------------------------------------
+                         required time                          8.746    
+                         arrival time                          -7.078    
+  -------------------------------------------------------------------
+                         slack                                  1.669    
+
+Slack (MET) :             1.748ns  (required time - arrival time)
+  Source:                 g_compact.u_enc/g_sm4.u_sm/sum_r_reg[1]/C
+                            (rising edge-triggered cell FDCE clocked by clk  {rise@0.000ns fall@3.333ns period=6.667ns})
+  Destination:            g_compact.u_enc/g_sm4.u_sm/div_rem_reg[29]/D
+                            (rising edge-triggered cell FDCE clocked by clk  {rise@0.000ns fall@3.333ns period=6.667ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            6.667ns  (clk rise@6.667ns - clk rise@0.000ns)
+  Data Path Delay:        4.782ns  (logic 3.463ns (72.417%)  route 1.319ns (27.583%))
+  Logic Levels:           16  (CARRY4=13 LUT2=1 LUT3=1 LUT4=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    1.904ns = ( 8.571 - 6.667 ) 
+    Source Clock Delay      (SCD):    2.217ns
+    Clock Pessimism Removal (CPR):    0.167ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk
+                         IBUF (Prop_ibuf_I_O)         0.904     0.904 r  clk_IBUF_inst/O
+                         net (fo=1, unplaced)         0.647     1.552    clk_IBUF
+                         BUFG (Prop_bufg_I_O)         0.081     1.633 r  clk_IBUF_BUFG_inst/O
+                         net (fo=18411, unplaced)     0.584     2.217    g_compact.u_enc/g_sm4.u_sm/clk_IBUF_BUFG
+                         FDCE                                         r  g_compact.u_enc/g_sm4.u_sm/sum_r_reg[1]/C
+  -------------------------------------------------------------------    -------------------
+                         FDCE (Prop_fdce_C_Q)         0.397     2.614 f  g_compact.u_enc/g_sm4.u_sm/sum_r_reg[1]/Q
+                         net (fo=6, unplaced)         0.657     3.271    g_compact.u_enc/g_sm4.u_sm/sum_r[1]
+                         LUT4 (Prop_lut4_I1_O)        0.252     3.523 r  g_compact.u_enc/g_sm4.u_sm/div_q[0]_i_35/O
+                         net (fo=1, unplaced)         0.000     3.523    g_compact.u_enc/g_sm4.u_sm/div_q[0]_i_35_n_0
+                         CARRY4 (Prop_carry4_DI[0]_CO[3])
+                                                      0.477     4.000 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_23/CO[3]
+                         net (fo=1, unplaced)         0.000     4.000    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_23_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     4.100 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_14/CO[3]
+                         net (fo=1, unplaced)         0.000     4.100    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_14_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     4.200 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_5/CO[3]
+                         net (fo=1, unplaced)         0.000     4.200    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_5_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     4.300 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_3/CO[3]
+                         net (fo=1, unplaced)         0.000     4.300    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_3_n_0
+                         CARRY4 (Prop_carry4_CI_CO[0])
+                                                      0.238     4.538 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_2/CO[0]
+                         net (fo=34, unplaced)        0.313     4.851    g_compact.u_enc/g_sm4.u_sm/take
+                         LUT3 (Prop_lut3_I2_O)        0.297     5.148 r  g_compact.u_enc/g_sm4.u_sm/div_rem[2]_i_5/O
+                         net (fo=1, unplaced)         0.000     5.148    g_compact.u_enc/g_sm4.u_sm/div_rem[2]_i_5_n_0
+                         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.444     5.592 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[2]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.592    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[2]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.692 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[6]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.692    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[6]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.792 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[10]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.792    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[10]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.892 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[14]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.892    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[14]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.992 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[18]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.992    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[18]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     6.092 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[22]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     6.092    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[22]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     6.192 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[26]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     6.192    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[26]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_O[2])
+                                                      0.214     6.406 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[30]_i_2/O[2]
+                         net (fo=1, unplaced)         0.349     6.755    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[30]_i_2_n_5
+                         LUT2 (Prop_lut2_I1_O)        0.244     6.999 r  g_compact.u_enc/g_sm4.u_sm/div_rem[29]_i_1/O
+                         net (fo=1, unplaced)         0.000     6.999    g_compact.u_enc/g_sm4.u_sm/div_rem[29]_i_1_n_0
+                         FDCE                                         r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[29]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)        6.667     6.667 r  
+                                                      0.000     6.667 r  clk (IN)
+                         net (fo=0)                   0.000     6.667    clk
+                         IBUF (Prop_ibuf_I_O)         0.773     7.440 r  clk_IBUF_inst/O
+                         net (fo=1, unplaced)         0.615     8.055    clk_IBUF
+                         BUFG (Prop_bufg_I_O)         0.077     8.132 r  clk_IBUF_BUFG_inst/O
+                         net (fo=18411, unplaced)     0.439     8.571    g_compact.u_enc/g_sm4.u_sm/clk_IBUF_BUFG
+                         FDCE                                         r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[29]/C
+                         clock pessimism              0.167     8.739    
+                         clock uncertainty           -0.035     8.703    
+                         FDCE (Setup_fdce_C_D)        0.043     8.746    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[29]
+  -------------------------------------------------------------------
+                         required time                          8.746    
+                         arrival time                          -6.999    
+  -------------------------------------------------------------------
+                         slack                                  1.748    
+
+Slack (MET) :             1.769ns  (required time - arrival time)
+  Source:                 g_compact.u_enc/g_sm4.u_sm/sum_r_reg[1]/C
+                            (rising edge-triggered cell FDCE clocked by clk  {rise@0.000ns fall@3.333ns period=6.667ns})
+  Destination:            g_compact.u_enc/g_sm4.u_sm/div_rem_reg[26]/D
+                            (rising edge-triggered cell FDCE clocked by clk  {rise@0.000ns fall@3.333ns period=6.667ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            6.667ns  (clk rise@6.667ns - clk rise@0.000ns)
+  Data Path Delay:        4.761ns  (logic 3.432ns (72.086%)  route 1.329ns (27.914%))
+  Logic Levels:           15  (CARRY4=12 LUT2=1 LUT3=1 LUT4=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    1.904ns = ( 8.571 - 6.667 ) 
+    Source Clock Delay      (SCD):    2.217ns
+    Clock Pessimism Removal (CPR):    0.167ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk
+                         IBUF (Prop_ibuf_I_O)         0.904     0.904 r  clk_IBUF_inst/O
+                         net (fo=1, unplaced)         0.647     1.552    clk_IBUF
+                         BUFG (Prop_bufg_I_O)         0.081     1.633 r  clk_IBUF_BUFG_inst/O
+                         net (fo=18411, unplaced)     0.584     2.217    g_compact.u_enc/g_sm4.u_sm/clk_IBUF_BUFG
+                         FDCE                                         r  g_compact.u_enc/g_sm4.u_sm/sum_r_reg[1]/C
+  -------------------------------------------------------------------    -------------------
+                         FDCE (Prop_fdce_C_Q)         0.397     2.614 f  g_compact.u_enc/g_sm4.u_sm/sum_r_reg[1]/Q
+                         net (fo=6, unplaced)         0.657     3.271    g_compact.u_enc/g_sm4.u_sm/sum_r[1]
+                         LUT4 (Prop_lut4_I1_O)        0.252     3.523 r  g_compact.u_enc/g_sm4.u_sm/div_q[0]_i_35/O
+                         net (fo=1, unplaced)         0.000     3.523    g_compact.u_enc/g_sm4.u_sm/div_q[0]_i_35_n_0
+                         CARRY4 (Prop_carry4_DI[0]_CO[3])
+                                                      0.477     4.000 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_23/CO[3]
+                         net (fo=1, unplaced)         0.000     4.000    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_23_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     4.100 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_14/CO[3]
+                         net (fo=1, unplaced)         0.000     4.100    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_14_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     4.200 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_5/CO[3]
+                         net (fo=1, unplaced)         0.000     4.200    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_5_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     4.300 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_3/CO[3]
+                         net (fo=1, unplaced)         0.000     4.300    g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_3_n_0
+                         CARRY4 (Prop_carry4_CI_CO[0])
+                                                      0.238     4.538 r  g_compact.u_enc/g_sm4.u_sm/div_q_reg[0]_i_2/CO[0]
+                         net (fo=34, unplaced)        0.313     4.851    g_compact.u_enc/g_sm4.u_sm/take
+                         LUT3 (Prop_lut3_I2_O)        0.297     5.148 r  g_compact.u_enc/g_sm4.u_sm/div_rem[2]_i_5/O
+                         net (fo=1, unplaced)         0.000     5.148    g_compact.u_enc/g_sm4.u_sm/div_rem[2]_i_5_n_0
+                         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.444     5.592 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[2]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.592    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[2]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.692 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[6]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.692    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[6]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.792 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[10]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.792    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[10]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.892 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[14]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.892    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[14]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     5.992 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[18]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     5.992    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[18]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.100     6.092 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[22]_i_2/CO[3]
+                         net (fo=1, unplaced)         0.000     6.092    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[22]_i_2_n_0
+                         CARRY4 (Prop_carry4_CI_O[3])
+                                                      0.277     6.369 r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[26]_i_2/O[3]
+                         net (fo=1, unplaced)         0.359     6.728    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[26]_i_2_n_4
+                         LUT2 (Prop_lut2_I1_O)        0.250     6.978 r  g_compact.u_enc/g_sm4.u_sm/div_rem[26]_i_1/O
+                         net (fo=1, unplaced)         0.000     6.978    g_compact.u_enc/g_sm4.u_sm/div_rem[26]_i_1_n_0
+                         FDCE                                         r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[26]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)        6.667     6.667 r  
+                                                      0.000     6.667 r  clk (IN)
+                         net (fo=0)                   0.000     6.667    clk
+                         IBUF (Prop_ibuf_I_O)         0.773     7.440 r  clk_IBUF_inst/O
+                         net (fo=1, unplaced)         0.615     8.055    clk_IBUF
+                         BUFG (Prop_bufg_I_O)         0.077     8.132 r  clk_IBUF_BUFG_inst/O
+                         net (fo=18411, unplaced)     0.439     8.571    g_compact.u_enc/g_sm4.u_sm/clk_IBUF_BUFG
+                         FDCE                                         r  g_compact.u_enc/g_sm4.u_sm/div_rem_reg[26]/C
+                         clock pessimism              0.167     8.739    
+                         clock uncertainty           -0.035     8.703    
+                         FDCE (Setup_fdce_C_D)        0.043     8.746    g_compact.u_enc/g_sm4.u_sm/div_rem_reg[26]
+  -------------------------------------------------------------------
+                         required time                          8.746    
+                         arrival time                          -6.978    
+  -------------------------------------------------------------------
+                         slack                                  1.769    
+
+
+
+

@@ -13,6 +13,11 @@ set root [file normalize [file join [file dirname [info script]] ..]]
 set part "xc7a100tfgg484-2"
 if {[llength $argv] > 0} { set part [lindex $argv 0] }
 
+# 设计里有 6~20 万 bit 级的大 reg 数组（p_buf 78440 / score_buf 158400 /
+# h_buf 202752 ...），Vivado 默认溶解上限是 78440，超过直接 ERROR 退出。
+# 抬高上限让它们溶解成触发器，否则综合根本跑不完。
+set_param synth.elaboration.rodinMoreOptions {rt::set_parameter dissolveMemorySizeLimit 400000}
+
 set outdir [file join $root syn out]
 file mkdir $outdir
 
@@ -44,8 +49,13 @@ set_output_delay -clock clk 2.0 [all_outputs]
 set_load 0.05 [all_outputs]
 
 opt_design
-place_design
-route_design
+
+# 1.47M 触发器远超 XC7A100T 的 126,800，place_design 必然失败。
+# 默认只跑到 opt_design 出资源/时序报告；加 -impl 才继续走完整实现。
+if {[lsearch -exact $argv "-impl"] >= 0} {
+    place_design
+    route_design
+}
 
 # ---------------------------------------------------------------------------
 # reports

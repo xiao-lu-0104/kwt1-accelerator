@@ -20,7 +20,10 @@ module kwt_encoder_12 #(
     parameter TOK = 99,
     parameter D   = 64,
     parameter FF  = 256,
-    parameter NLAYER = 12
+    parameter NLAYER = 12,
+    parameter COMPACT = 1,
+    parameter KV_SHARED = 1,
+    parameter SOFTMAX_LANES = 4
 )(
     input  wire               clk,
     input  wire               rst_n,
@@ -66,6 +69,7 @@ module kwt_encoder_12 #(
     localparam S_RUN  = 4'd9;
     localparam S_NEXT = 4'd10;
     localparam S_DONE = 4'd11;
+    localparam S_XR   = 4'd12;
 
     function [13:0] wlen(input [3:0] s);
         wlen = (s < 4'd4) ? NW4[13:0] : NWF[13:0];
@@ -92,8 +96,7 @@ module kwt_encoder_12 #(
 
     reg         xin_we;
     reg  [12:0] xin_addr;
-    reg  [7:0]  xin_data;
-    reg  [7:0]  xhold [0:TACT-1];
+    wire [7:0]  xin_data;
     reg         enc_start;
 
     wire        enc_out_we;
@@ -106,7 +109,9 @@ module kwt_encoder_12 #(
     assign out_addr = enc_out_addr;
     assign out_data = enc_out_data;
 
-    kwt_encoder_layer #(.TOK(TOK), .D(D), .FF(FF)) u_enc (
+    generate if (COMPACT) begin: g_compact
+    kwt_encoder_layer_compact #(.TOK(TOK), .D(D), .FF(FF), .KV_SHARED(KV_SHARED),
+        .SOFTMAX_LANES(SOFTMAX_LANES)) u_enc (
         .clk(clk), .rst_n(rst_n), .start(enc_start),
         .x_we(xin_we), .x_addr(xin_addr), .x_data(xin_data),
         .p_wgt_we(1'b0), .p_wgt_sel(ld_sel[2:0]),
@@ -123,11 +128,36 @@ module kwt_encoder_12 #(
         .out_we(enc_out_we), .out_addr(enc_out_addr), .out_data(enc_out_data),
         .done(enc_done), .cycle_count()
     );
+    end else begin: g_legacy
+    kwt_encoder_layer #(.TOK(TOK), .D(D), .FF(FF)) u_enc (
+        .clk(clk), .rst_n(rst_n), .start(enc_start),
+        .x_we(xin_we), .x_addr(xin_addr), .x_data(xin_data),
+        .p_wgt_we(1'b0), .p_wgt_sel(ld_sel[2:0]),
+        .p_wgt_addr(ld_addr), .p_wgt_data(rom_wgt),
+        .p_wgt_we16(ld_wgt), .p_wgt_data16(rom_wgt16),
+        .p_bp_we(ld_bp), .p_bp_sel(bp_sel_c), .p_bp_addr(bp_addr_c),
+        .p_bp_bias(rom_bias), .p_bp_m(rom_m),
+        .p_ln_we(ld_ln), .p_ln_sel(ld_addr[6]), .p_ln_addr(ld_addr[5:0]),
+        .p_ln_gamma(rom_ln_gamma), .p_ln_beta(rom_ln_beta), .p_ln_eps(32'd0),
+        .m_score(m_score_r), .m_ctx(m_ctx_r),
+        .ma1(ma1_r), .mb1(mb1_r), .ma2(ma2_r), .mb2(mb2_r),
+        .out_we(enc_out_we), .out_addr(enc_out_addr), .out_data(enc_out_data),
+        .done(enc_done), .cycle_count());
+    end endgenerate
 
-    always @(posedge clk) begin
-        if (enc_out_we && layer != NLR) xhold[enc_out_addr] <= enc_out_data;
-        if (x_we) xhold[x_addr] <= x_data;
-    end
+    // Layer boundary: one packed 16x4096 SRAM, rather than 50,688 FFs.
+    wire xh_we=x_we||(enc_out_we&&layer!=NLR);
+    wire [12:0] xh_addr=x_we?x_addr:enc_out_addr;
+    wire [7:0] xh_data=x_we?x_data:enc_out_data;
+    wire [15:0] xh_wdata=xh_addr[0]?{xh_data,8'd0}:{8'd0,xh_data};
+    wire [3:0] xh_mask=xh_addr[0]?4'b1100:4'b0011;
+    wire [15:0] xh_q;
+    wire [15:0] xh_next=cnt+16'd1;
+    wire [11:0] xh_ra=(state==S_XF)?xh_next[12:1]:12'd0;
+    kwt_packed_sram #(.DW(16),.DEPTH(4096)) u_xhold (
+        .clk(clk),.rst_n(rst_n),.wr(xh_we),.wa(xh_addr[12:1]),
+        .wd(xh_wdata),.mask(xh_mask),.ra(xh_ra),.rd(xh_q));
+    assign xin_data=xin_addr[0]?xh_q[15:8]:xh_q[7:0];
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) enc_done_d <= 1'b0;
@@ -145,7 +175,6 @@ module kwt_encoder_12 #(
             ld_addr     <= 14'd0;
             xin_we      <= 1'b0;
             xin_addr    <= 13'd0;
-            xin_data    <= 8'd0;
             enc_start   <= 1'b0;
             m_score_r   <= 32'sd0;
             m_ctx_r     <= 32'sd0;
@@ -268,16 +297,20 @@ module kwt_encoder_12 #(
                     endcase
                     if (cnt == 16'd5) begin
                         cnt      <= 16'd0;
-                        xin_we   <= 1'b1;
+                        xin_we   <= 1'b0;
                         xin_addr <= 13'd0;
-                        xin_data <= xhold[0];
-                        state    <= S_XF;
+                        state    <= S_XR;
                     end else begin
                         cnt     <= cnt + 16'd1;
                         ld_addr <= ld_addr + 14'd1;
                     end
                 end
 
+                // Prime the synchronous boundary SRAM before the first byte.
+                S_XR: begin
+                    xin_we <= 1'b1;
+                    state <= S_XF;
+                end
                 // -------- feed activation --------
                 S_XF: begin
                     if (cnt == TACT-1) begin
@@ -288,7 +321,6 @@ module kwt_encoder_12 #(
                     end else begin
                         cnt      <= cnt + 16'd1;
                         xin_addr <= cnt[12:0] + 13'd1;
-                        xin_data <= xhold[cnt[12:0] + 13'd1];
                     end
                 end
 

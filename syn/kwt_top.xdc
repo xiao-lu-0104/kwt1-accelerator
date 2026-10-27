@@ -4,7 +4,7 @@
 create_clock -name clk -period 6.667 [get_ports clk]
 
 # The parameter ROM feeds wgt nibbles; keep it in the same clock domain.
-set_input_delay  -clock clk 2.0 [remove_from_collection [all_inputs] [get_ports clk]]
+set_input_delay  -clock clk 2.0 [get_ports -filter {DIRECTION == IN && NAME != clk}]
 set_output_delay -clock clk 2.0 [all_outputs]
 
 set_load 0.05 [all_outputs]
