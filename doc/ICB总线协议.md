@@ -204,20 +204,65 @@ done / cycle_count[31:0]       状态
 参数总量 **607,308 × 4 bit ≈ 304 KB**，远超片内 SRAM 预算（规划 80 KiB），
 必须放在 SoC 层的片外存储（QSPI Flash 或主机下发的内存）里。
 
-每层推理前 `kwt_encoder_12` 会**顺序扫描**参数 ROM：
+每层推理前 `kwt_encoder_12` 会**顺序扫描**参数 ROM（FSM 逐状态实测）：
 
-| 扫描内容 | 位宽 | 拍数/层 |
+| 状态 | 扫描内容 | 宽度 / 拍 | 拍数/层 |
+|---|---|---|---|
+| `S_LW` | Q/K/V/O 权重（4 × 4096 nibble） | `rom_wgt16[63:0]`，16 nibble/拍 | 1,024 |
+| `S_LW` | FFN1/FFN2 权重（2 × 16384 nibble） | `rom_wgt16[63:0]`，16 nibble/拍 | 2,048 |
+| `S_LBQ` | Q/K/V 乘子（192 字） | `rom_m[31:0]`，1 字/拍 | 192 |
+| `S_LBO` / `S_LBF1` / `S_LBF2` | O / FFN1 / FFN2 偏置乘子（64+256+64） | `rom_bias`+`rom_m`，1 字/拍 | 384 |
+| `S_LLN` / `S_LLC` | LN gamma+beta（128）+ 层常量（6） | `rom_ln_*` / `rom_m`，1 字/拍 | 134 |
+| **合计** | | | **3,782 拍/层** |
+
+12 层共 **45,384 拍 ≈ 0.30 ms @150 MHz**，占 21.6 ms 总推理时间的 **1.4%**，可接受。
+
+### ⚠️ 关键障碍：当前 ROM 接口是零延迟的
+
+```verilog
+wire ld_wgt = (state == S_LW);           // 组合逻辑，与 ld_addr 同拍
+wire ld_bp  = (state == S_LBQ) || (state == S_LBO) || ...;
+wire ld_ln  = (state == S_LLN);
+// 且 rom_wgt16 / rom_bias / rom_m / rom_ln_* 直接进层内写口
+.p_wgt_we16(ld_wgt), .p_wgt_data16(rom_wgt16),
+```
+
+也就是说 **ROM 数据必须与 `ld_addr` 同拍到达**，等价于一个组合读存储器。
+304 KB 不可能用触发器实现，而给定的 SRAM 宏全是同步读（1 拍延迟），
+QSPI Flash 更慢（数十拍）。**直接接总线会无法工作。**
+
+#### 推荐改法：加 `rom_valid` 握手，让 FSM 可以停顿
+
+扫描地址严格单调递增，所以只需：
+
+```verilog
+// kwt_encoder_12 新增输入
+input wire rom_valid;   // 外部参数通路给出「当前 ld_addr 对应数据已就绪」
+
+// 各装载状态里的推进条件全部加 rom_valid 门控
+// 例：S_LW
+if (!rom_valid) begin
+    // 保持 cnt / ld_addr 不变
+end else if (cnt >= wlen(sel) - 16'd16) begin ... end
+else begin cnt <= cnt + 16'd16; ld_addr <= ld_addr + 14'd16; end
+```
+
+**为什么停顿时不写脏数据**：`ld_addr` 不推进时，`ld_wgt` 保持为高、数据保持不变，
+层内写口就是「往同一地址重复写同一个值」—— 幂等，无副作用。
+所以不需要额外门控 `we`，改动面很小。
+
+外部只需保证：给定单调递增的 `ld_addr` 序列，`rom_valid` 在数据就绪时拉高。
+
+#### 外部参数通路的两种选择
+
+| 方案 | 延迟吸收方式 | 适用 |
 |---|---|---|
-| Q/K/V/O 权重（各 4096 nibble） | `rom_wgt[3:0]`，4 bit/拍 | 4 × 1024 = 4,096 |
-| FFN1/FFN2 权重（各 16384 nibble） | `rom_wgt16[63:0]`，16 nibble/拍 | 2 × 1,024 = 2,048 |
-| 偏置 / 乘子 / LN / 常量 | 32 bit 或 16 bit | < 100 |
-| **合计** | | **≈ 6,144 拍/层** |
+| 片内参数 SRAM（若放得下） | 同步 SRAM 输出打一拍，`rom_valid` 恒为 1（首拍除外） | 参数 ≤ 80 KiB，本设计 304 KB **放不下** |
+| 片外 QSPI Flash + 流式预取 FIFO | 顺序扫描天然适合流式预取，FIFO 非空则 `rom_valid=1` | **本设计的现实选择** |
 
-12 层共 **≈ 74K 拍 ≈ 0.49 ms @150 MHz**，占 21.5 ms 总推理时间的 2.3%，可接受。
+因为地址严格顺序递增，预取 FIFO 只需按 16 nibble 一组连续预取即可，
+不需要随机访问，实现比通用 cache 简单得多。
 
-**但如果参数在 QSPI Flash 上**（读延迟数十拍），顺序扫描会被拖垮：
-74K 拍可能膨胀到数十 ms，比推理本身还长。
-**必须在扫描通路前加预取 FIFO / 行缓存**，这是 SoC 集成里最需要设计的地方。
 
 ### 8.4 待确认事项
 
