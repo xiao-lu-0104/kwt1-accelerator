@@ -4,7 +4,10 @@
 // One physical kwt_encoder_layer is reused for all 12 layers. Before each
 // layer the parameter ROM is scanned and pushed into the layer.
 //
-// ROM interface: the external ROM is indexed by {cur_layer, ld_sel, ld_addr}.
+// Parameter interface: indexed by {cur_layer, ld_sel, ld_addr}.
+// PARAM_HANDSHAKE=0 preserves the combinational-ROM regression interface.
+// PARAM_HANDSHAKE=1 accepts a parameter only on param_valid && param_ready;
+// the selector/address and all parameter destinations hold during a stall.
 // ld_addr drives both the ROM address and the layer's parameter address, so
 // the address and data always agree (no one-cycle skew).
 //
@@ -23,7 +26,8 @@ module kwt_encoder_12 #(
     parameter NLAYER = 12,
     parameter COMPACT = 1,
     parameter KV_SHARED = 1,
-    parameter SOFTMAX_LANES = 4
+    parameter SOFTMAX_LANES = 4,
+    parameter PARAM_HANDSHAKE = 0
 )(
     input  wire               clk,
     input  wire               rst_n,
@@ -49,7 +53,9 @@ module kwt_encoder_12 #(
     output wire [7:0]         out_data,
 
     output reg                done,
-    output reg  [31:0]        cycle_count
+    output reg  [31:0]        cycle_count,
+    input  wire              param_valid,
+    output wire              param_ready
 );
 
     localparam TACT = TOK*D;
@@ -71,8 +77,11 @@ module kwt_encoder_12 #(
     localparam S_DONE = 4'd11;
     localparam S_XR   = 4'd12;
 
-    function [13:0] wlen(input [3:0] s);
-        wlen = (s < 4'd4) ? NW4[13:0] : NWF[13:0];
+    // This is a LENGTH, not an address: 16384 needs 15 bits. Truncating it
+    // to the 14-bit address width wrapped the FFN length to zero and made
+    // the 16-bit counter scan each FFN block four times before advancing.
+    function [15:0] wlen(input [3:0] s);
+        wlen = (s < 4'd4) ? NW4[15:0] : NWF[15:0];
     endfunction
 
     reg [3:0]  state;
@@ -83,11 +92,17 @@ module kwt_encoder_12 #(
     reg signed [31:0] m_score_r, m_ctx_r;
     reg signed [15:0] ma1_r, mb1_r, ma2_r, mb2_r;
 
-    // parameter push: address always equals ld_addr, data comes straight
-    // from the ROM combinationally, so they can never disagree
-    wire        ld_wgt  = (state == S_LW);    wire        ld_bp   = (state == S_LBQ) || (state == S_LBO) ||
-                          (state == S_LBF1) || (state == S_LBF2);
-    wire        ld_ln   = (state == S_LLN);
+    wire loading = (state == S_LW) || (state == S_LBQ) ||
+                   (state == S_LBO) || (state == S_LBF1) ||
+                   (state == S_LBF2) || (state == S_LLN) || (state == S_LLC);
+    assign param_ready = (PARAM_HANDSHAKE != 0) && rst_n && loading;
+    wire load_accept = (PARAM_HANDSHAKE == 0) || param_valid;
+    // Gate writes as well as the scanner. Invalid data must never reach the
+    // packed SRAM pending pipeline, LN registers or layer constants.
+    wire        ld_wgt  = (state == S_LW) && load_accept;
+    wire        ld_bp   = ((state == S_LBQ) || (state == S_LBO) ||
+                          (state == S_LBF1) || (state == S_LBF2)) && load_accept;
+    wire        ld_ln   = (state == S_LLN) && load_accept;
     wire [2:0]  bp_sel_c = (state == S_LBQ)  ? {1'b0, ld_addr[7:6]} :
                            (state == S_LBO)  ? 3'd3 :
                            (state == S_LBF1) ? 3'd4 : 3'd5;
@@ -202,7 +217,7 @@ module kwt_encoder_12 #(
                 end
 
                 // -------- weights: sel 0..5 (16 nibbles per cycle) --------
-                S_LW: begin
+                S_LW: if (load_accept) begin
                     if (cnt >= wlen(sel) - 16'd16) begin
                         cnt     <= 16'd0;
                         ld_addr <= 14'd0;
@@ -220,7 +235,7 @@ module kwt_encoder_12 #(
                 end
 
                 // -------- Q/K/V multipliers  (3 x 64, addr[7:6] selects) --------
-                S_LBQ: begin
+                S_LBQ: if (load_accept) begin
                     if (cnt == 16'd191) begin
                         cnt     <= 16'd0;
                         ld_addr <= 14'd0;
@@ -233,7 +248,7 @@ module kwt_encoder_12 #(
                 end
 
                 // -------- O bias/m  (64) --------
-                S_LBO: begin
+                S_LBO: if (load_accept) begin
                     if (cnt == 16'd63) begin
                         cnt     <= 16'd0;
                         ld_addr <= 14'd0;
@@ -246,7 +261,7 @@ module kwt_encoder_12 #(
                 end
 
                 // -------- FFN1 bias/m  (256) --------
-                S_LBF1: begin
+                S_LBF1: if (load_accept) begin
                     if (cnt == 16'd255) begin
                         cnt     <= 16'd0;
                         ld_addr <= 14'd0;
@@ -259,7 +274,7 @@ module kwt_encoder_12 #(
                 end
 
                 // -------- FFN2 bias/m  (64) --------
-                S_LBF2: begin
+                S_LBF2: if (load_accept) begin
                     if (cnt == 16'd63) begin
                         cnt     <= 16'd0;
                         ld_addr <= 14'd0;
@@ -272,7 +287,7 @@ module kwt_encoder_12 #(
                 end
 
                 // -------- LN1 (0..63) then LN2 (64..127) --------
-                S_LLN: begin
+                S_LLN: if (load_accept) begin
                     if (cnt == 16'd127) begin
                         cnt     <= 16'd0;
                         ld_addr <= 14'd0;
@@ -285,7 +300,7 @@ module kwt_encoder_12 #(
                 end
 
                 // -------- layer constants (6) --------
-                S_LLC: begin
+                S_LLC: if (load_accept) begin
                     case (cnt)
                         16'd0: m_score_r <= rom_m;
                         16'd1: m_ctx_r   <= rom_m;

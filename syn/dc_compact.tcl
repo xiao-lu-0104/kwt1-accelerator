@@ -4,6 +4,7 @@
 # Run: dc_shell -f syn/dc_compact.tcl
 # TT result is a synthesis check, not a worst-corner / physical timing signoff.
 if {[catch {
+set SDC_FILE [file join [file dirname [file normalize [info script]]] kwt_encoder_12.sdc]
 set ROOT [file normalize [file join [file dirname [info script]] ..]]
 if {[info exists ::env(KWT_RTL_ROOT)]} {set ROOT [file normalize $::env(KWT_RTL_ROOT)]}
 set DESIGN kwt_encoder_12
@@ -74,12 +75,12 @@ if {[sizeof_collection $macros] != 40} {
 set_dont_touch $macros true
 
 if {!$resume} {
-    create_clock -name clk -period $CLK_PER [get_ports clk]
-    set_clock_uncertainty 1.0 [get_clocks clk]
-    set_clock_transition 0.2 [get_clocks clk]
-    set_input_delay -clock clk 0.5 [remove_from_collection [all_inputs] [get_ports clk]]
-    set_output_delay -clock clk 0.5 [all_outputs]
-    set_load 0.02 [all_outputs]
+    if {![file isfile $SDC_FILE]} {error "Independent SDC missing: $SDC_FILE"}
+    source $SDC_FILE
+    puts "CONSTRAINT_SOURCE: $SDC_FILE (1 ns setup/hold engineering baseline; closure evaluated below)"
+    if {abs([get_attribute [get_clocks clk] period] - $CLK_PER) > 0.000001} {
+        error "Independent SDC clock period differs from $CLK_PER ns"
+    }
     # Use actual macro timing, without estimated hierarchical pin delays.
     compile_ultra -no_autoungroup
     # Save BEFORE validation/reporting, so a reporting error can be recovered
@@ -182,6 +183,28 @@ if {[sizeof_collection $macro_outputs] == 0} {error "No macro read-data pins fou
 set macro_paths [get_timing_paths -through $macro_outputs -max_paths 1]
 if {[sizeof_collection $macro_paths] == 0} {error "No constrained path through macro read outputs"}
 report_timing -through $macro_outputs -max_paths 20 > $REPORT/timing_sram_read.rpt
+if {[info exists ::env(KWT_DC_EXPECT_SPLIT_PHASE)] && $::env(KWT_DC_EXPECT_SPLIT_PHASE) eq "1"} {
+    # Report both real clock-pair checks and staged write-data paths. The B
+    # clock inversion is RTL hardware; no generated-clock fiction or disabled
+    # collision/timing arcs is used. Inspect the edge times in these reports.
+    set macro_clocks [get_pins -of_objects $macros -filter {full_name =~ */CLKA || full_name =~ */CLKB}]
+    set write_inputs [get_pins -of_objects $macros -filter {direction == in && (full_name =~ */DB* || full_name =~ */AB* || full_name =~ */CENB || full_name =~ */WENB*)}]
+    if {[sizeof_collection $macro_clocks] != 80 || [sizeof_collection $write_inputs] == 0} {
+        error "Split-phase report requires 80 macro clock pins and nonempty B inputs"
+    }
+    foreach kind {max min} {
+        set clock_paths [get_timing_paths -from [get_ports clk] -to $macro_clocks -delay_type $kind -max_paths 1]
+        set write_paths [get_timing_paths -to $write_inputs -delay_type $kind -max_paths 1]
+        if {[sizeof_collection $clock_paths] == 0 || [sizeof_collection $write_paths] == 0} {
+            error "Missing constrained split-phase $kind path; inspect clock propagation"
+        }
+        puts "PHASE_CLOCK_${kind}_WNS: [get_attribute $clock_paths slack] ns"
+        puts "PHASE_WRITE_${kind}_WNS: [get_attribute $write_paths slack] ns"
+        report_timing -from [get_ports clk] -to $macro_clocks -delay_type $kind -max_paths 10 -significant_digits 6 > $REPORT/timing_phase_clock_${kind}.rpt
+        report_timing -to $write_inputs -delay_type $kind -max_paths 10 -significant_digits 6 > $REPORT/timing_phase_write_${kind}.rpt
+    }
+    puts "PHASE_EDGE_REVIEW: required; root period 6.667 ns, CLKA rise / CLKB fall; no timing exceptions"
+}
 check_timing > $REPORT/check_timing.rpt
 report_power > $REPORT/power_estimate_no_saif.rpt
 report_clock_gating > $REPORT/clock_gating.rpt

@@ -1,7 +1,11 @@
-# Report-only sensitivity analysis of the verified, pre-repair checkpoint.
+# Report-only baseline sensitivity or mapped-pilot SRAM clock/data analysis.
 # The zero-hold-uncertainty view is diagnostic, never an accepted constraint set.
 # No compile, buffering, mapped-design export, or source-checkpoint mutation.
 if {[catch {
+set clock_audit 0
+if {[info exists ::env(KWT_DC_AUDIT_SRAM_CLOCKS)] && $::env(KWT_DC_AUDIT_SRAM_CLOCKS) eq "1"} {
+    set clock_audit 1
+}
 foreach required {KWT_DC_CHECKPOINT KWT_SRAM_DB_DIR KWT_DC_REPORT_DIR} {
     if {![info exists ::env($required)]} {error "Missing environment variable $required"}
 }
@@ -38,6 +42,14 @@ set macro_inputs [get_pins -of_objects $macros -filter {direction == in && full_
 if {[sizeof_collection $macro_inputs] == 0} {error "No SRAM data/control inputs"}
 set register_inputs [remove_from_collection [all_registers -data_pins] $macro_inputs]
 
+proc kwt_audit_sdc_signature {text} {
+    set result {}
+    foreach line [split $text "\n"] {
+        set line [string trim $line]
+        if {$line ne "" && ![string match {#*} $line]} {lappend result $line}
+    }
+    return $result
+}
 proc kwt_audit_wns {kind args} {
     set paths [eval get_timing_paths -delay_type $kind -max_paths 1 $args]
     if {[sizeof_collection $paths] == 0} {error "Missing constrained $kind path ($args)"}
@@ -61,7 +73,7 @@ proc kwt_audit_reports {tag} {
     return [list $setup $hold]
 }
 
-puts "AUDIT_MODE: report only; no optimization; no timing signoff"
+puts "AUDIT_MODE: report only; no optimization; no timing signoff; mapped-pilot clock audit = $clock_audit"
 puts "AUDIT_CHECKPOINT: $::env(KWT_DC_CHECKPOINT)"
 puts "AUDIT_SRAM_CELLS: 40 x RAMTP1024X16"
 write_sdc -nosplit $REPORT/baseline.sdc
@@ -78,6 +90,30 @@ report_qor > $REPORT/baseline_qor.rpt
 check_timing > $REPORT/baseline_check_timing.rpt
 set baseline [kwt_audit_reports BASELINE]
 
+if {$clock_audit} {
+    set macro_clocks [get_pins -of_objects $macros -filter {full_name =~ */CLKA || full_name =~ */CLKB}]
+    if {[sizeof_collection $macro_clocks] != 80} {error "Expected exactly 80 SRAM clock pins"}
+    set data_endpoints [add_to_collection $register_inputs $macro_inputs]
+    set data_endpoints [add_to_collection $data_endpoints [all_outputs]]
+    set data_endpoints [remove_from_collection $data_endpoints $macro_clocks]
+    puts "CLOCK_AUDIT_DATA_ENDPOINT_HOLD_WNS: [kwt_audit_wns min -to $data_endpoints] ns"
+    puts "CLOCK_AUDIT_SRAM_CLOCK_PIN_HOLD_WNS: [kwt_audit_wns min -to $macro_clocks] ns"
+    set macro_outputs [get_pins -of_objects $macros -filter {direction == out}]
+    puts "CLOCK_AUDIT_SRAM_READ_HOLD_WNS: [kwt_audit_wns min -through $macro_outputs] ns"
+    report_timing -delay_type min -to $data_endpoints -max_paths 10 -significant_digits 6 > $REPORT/data_endpoint_hold.rpt
+    report_timing -delay_type min -to $macro_clocks -max_paths 10 -significant_digits 6 > $REPORT/sram_clock_pin_hold.rpt
+    report_timing -delay_type min -through $macro_outputs -max_paths 10 -significant_digits 6 > $REPORT/sram_read_hold.rpt
+    write_sdc -nosplit $REPORT/clock_audit_after.sdc
+    set fp [open $REPORT/clock_audit_after.sdc r]
+    set after_sdc [read $fp]
+    close $fp
+    if {[kwt_audit_sdc_signature $after_sdc] ne [kwt_audit_sdc_signature $baseline_sdc]} {
+        error "Constraints changed during report-only clock audit"
+    }
+    puts "CLOCK_AUDIT_ACCEPTANCE: NONE; all original timing arcs and constraints retained"
+    puts "AUDIT_REPORTS: $REPORT"
+    puts "KWT_SRAM_CLOCK_AUDIT_COMPLETE"
+} else {
 # Deliberately change ONLY the in-memory hold uncertainty for sensitivity.
 # Setup uncertainty, all IO/path constraints, the netlist and input DDC persist.
 # No DDC/netlist is written from this diagnostic view.
@@ -92,6 +128,7 @@ puts "AUDIT_HOLD_WNS_DELTA: [expr {[lindex $diagnostic 1] - [lindex $baseline 1]
 puts "AUDIT_ACCEPTANCE: NONE; baseline constraints/status unchanged; hold closure remains pending"
 puts "AUDIT_REPORTS: $REPORT"
 puts "KWT_HOLD_AUDIT_COMPLETE"
+}
 } task_error]} {
     puts stderr "KWT_AUDIT_ERROR: $task_error"
     exit 1

@@ -5,6 +5,13 @@
 CPU 行为存储器指令回归已完成：67/67，通过时保留了仿真 DIV/REM 参考计算修正。
 这不验证加速器 SRAM 宏。
 
+**最新：真实手册已读取，同一行碰撞不能靠 forwarding 保证写入。当前 ASIC
+RTL 已改成半拍版，v8b 真实宏四组回归通过；新综合总单元面积 0.9702 mm²、
+TT setup +0.047 ns，原 1 ns hold 基线 −0.903385 ns。v9 的 100 ps 修复试验已通过，
+面积 0.9812 mm²、setup +0.047 ns、hold +0.000272155 ns；最终时钟预算待确认。详见
+[SRAM 半拍适配验证](SRAM半拍适配验证.md)及[本轮保持时间试验](SRAM半拍保持时间试验.md)。本文后续 v2、恢复综合、hold pilot
+数据均为旧同沿版本历史记录，不能沿用于新候选。**
+
 加速器默认 `kwt_encoder_12` 的逻辑存储需求：
 
 | 对象 | 深度 × 位宽 | 个数 |
@@ -16,10 +23,11 @@ CPU 行为存储器指令回归已完成：67/67，通过时保留了仿真 DIV/
 | 层间传递 | 4096 × 16 | 1 |
 | 合计 | 80 KiB | 37 |
 
-`kwt_mem16` 的契约是同一上升沿进行独立地址的一次读、一次写，读延迟一拍。
+`kwt_mem16` 在同一上升沿接受独立地址的一次读、一次写，读延迟一拍。
+当前 ASIC 适配层把物理写提交移至随后下降沿，并锁存整个写事务。
 `kwt_packed_sram` 在连续局部写时同时读下一次更新的旧字和提交上一次更新，
 因此不能直接换成单端口宏，也不能把一个双端口宏的两个地址绑在一起。
-其连续同址写依靠已有 forwarding；实际宏对同址读写输出的处理也需要验证。
+其连续同址写依靠已有 forwarding；物理端口间隔还须满足真实宏的碰撞要求。
 
 服务器首次检查已返回：有 `RAMTP128X16`、`RAMTP1024X16`，4096 深度仅见
 单端口 `RAMSP4096X16`，未见 `RAMTP4096X16`。因此逻辑 4096×16 采用 4 个
@@ -31,7 +39,7 @@ CPU 行为存储器指令回归已完成：67/67，通过时保留了仿真 DIV/
 
 | 引脚 | 配置 |
 |---|---|
-| CLKA / CLKB | 同一上升沿时钟 |
+| CLKA / CLKB | A 跟随根上升沿；B 用反相时钟，在根下降沿写锁存事务 |
 | CENA / CENB | 低有效；B 口仅在对应 bank 写入时使能 |
 | WENB[15:0] | 写入时全 0，禁止写入时全 1 |
 | EMAA / EMAB | 3'd2，模型明确检查默认工作值 |
@@ -225,6 +233,116 @@ bash ~/soc/kwt_hold_pilot_20261030/tools/rerun_kwt_sram_synthesis.sh --run-dir ~
 sed -n '1,100p' ~/soc/kwt_sram_20261029_150543_*/hold_pilot_*/dc_out_bound/timing_min.rpt
 ```
 
+### 残留路径已确认：SRAM 两口时钟检查
+
+服务器试验报告显示起点为 `clk (clock source 'clk')`，路径经同一时钟网络
+到 `RAMTP1024X16/CLKA`，相对于 `CLKB` 进行 hold 检查；反向也存在。
+报告的数据到达时间为 0、library hold time 为 0、hold uncertainty 为
+0.100 ns，故得到 −0.100 ns。当前最差路径的终点在宏时钟引脚；不能据此
+判断先前 `committed_data_reg -> DB` 的数据 hold 是否已通过。
+
+下一步仅从**已完成映射的试验 DDC** 做分类报告，同时核查原始 Liberty 的
+CLKA/CLKB timing type、related pin、when 和约束表数值，并打印官方模型中的
+原始跨时钟检查与可取得的宏手册摘录。保留所有检查，不将同源连接直接当作
+可以删除库时序检查的依据。无手册或无匹配语句时明确报告证据缺失。
+
+```bash
+mkdir -p ~/soc/kwt_sram_clock_audit_20261030
+tar -xzf ~/Desktop/kwt_sram_clock_audit_20261030.tar.gz -C ~/soc/kwt_sram_clock_audit_20261030
+bash ~/soc/kwt_sram_clock_audit_20261030/tools/rerun_kwt_sram_synthesis.sh --run-dir ~/soc/kwt_sram_20261029_150543_tqH6Fc --audit-sram-clocks
+```
+
+`--audit-sram-clocks` 只选择同一输入摘要、具有 `KWT_DC_COMPLETE` 标记的
+`hold_pilot_*/dc_out_bound/kwt_encoder_12.ddc`，不回退到优化前检查点。
+新目录为 `hold_clock_audit_*`；检查点与审计脚本前后校验 SHA256，序列化
+SDC 的所有命令必须保持不变（忽略注释中的时间戳）。不执行 compile、
+不改 hold 预算、不添加 false path、不禁用时序 arc、不输出新网表。
+库/文档摘录限时 60 秒，DC 报告限时 900 秒。
+
+摘要 `summary.txt` 包含原库证据和试验网表的：
+
+- 全局 setup/hold、SRAM 数据/控制输入 hold、其他寄存器数据输入 hold；
+- 数据终点集合的最差 hold（寄存器 D、SRAM 非时钟输入、顶层输出）；
+- SRAM 时钟引脚终点的最差 hold、经过 SRAM 读输出的最差 hold。
+
+这些分类只用于定位，原始全局 FAIL 继续保留；不能把数据集合通过直接等同于
+全设计时序闭合。读取精简摘要：
+
+```bash
+cat ~/soc/kwt_sram_20261029_150543_*/hold_clock_audit_*/summary.txt
+```
+
+### 分类审计的服务器结果（2026-10-30）
+
+已从修复后的试验 DDC 完成只读分类审计，保留所有库 timing arc、所有 SDC
+命令和输入检查点。100 ps hold 试验预算下，结果为：
+
+| 项目 | slack / ns | 本轮判断 |
+|---|---:|---|
+| 全局 setup | +0.0487933 | 通过 |
+| SRAM 非时钟输入 hold | +0.000272155 | 通过 |
+| 其他寄存器数据输入 hold | +0.0248893 | 通过 |
+| 数据终点集合 hold | +0.000272155 | 通过 |
+| 经过 SRAM 读输出的 hold | +0.373557 | 通过 |
+| SRAM 时钟引脚终点 hold | −0.100000 | 未通过 |
+
+先前 SRAM 数据 hold 缺口已经在该试验预算下修复；最小数据余量约 0.272 ps。
+原库摘录确认跨口检查为 `setup_rising` / `hold_rising`，两个方向 hold 表均为 0；
+setup 表为非零，且有 RET1N、EMA 与 CEN 条件。官方模型摘录还包含使用
+`ARM_MEM_COLLISION` 的跨时钟 `$setuphold`；不能据此将两口时钟互检直接忽略。
+
+当前尚未取得宏同步时钟用法及推荐 STA 约束的应用说明，整体 FAIL 继续保留，
+不重复全局修复。已将接线、原库证据、精确 slack 和需核对的问题整理到
+[SRAM 同源时钟约束核对](SRAM同源时钟约束核对.md)，供取得宏提供方或组委会
+说明后继续处理；该文件未向外部发送。
+
+### 数据手册入口与独立 SDC（2026-10-30）
+
+用户已查明官方不提供 SDC，参赛队须自行提交；宏交付包每套有 `datasheet/`
+目录。此前检查只查找 PDF，不能据此认定没有资料。现在直接读取：
+
+```text
+/storage1/admin_public_dir/SRAM_Lib_2025/RAMTP1024X16/datasheet/
+```
+
+`tools/read_kwt_sram_datasheets.py` 递归枚举文件，按内容读取普通文本、HTML、
+gzip/ZIP 包中的文档、PostScript，以及可用 `pdftotext` / `mutool` 转换的 PDF。
+PostScript 优先用 Ghostscript `txtwrite`，再尝试 `ps2ascii`、`ps2pdf` 后提取 PDF；
+命令只操作私有副本和输出，不将 PS 程序源码当成已提取的手册正文。
+参考 [Ghostscript 官方文本输出说明](https://ghostscript.readthedocs.io/en/latest/Devices.html#text-output)。
+默认只读当前 40 个物理宏使用的 RAMTP1024X16，优先当前 TT 1.1V/25℃及
+通用文档，默认提取一个文档并按选取优先级处理；所有文件路径保留在 inventory 中。
+格式不支持、转换工具缺失或资料缺失时明确标记 `EXTRACTION_UNRESOLVED`，
+不以没有关键字匹配推断合法性。完整文本、摘录和选中文档 SHA256 存入新建私有目录，
+不修改共享交付包；工具最多运行 120 秒、另有 5 秒退出宽限，不调用综合工具。
+
+```bash
+mkdir -p ~/soc/kwt_sram_datasheets_20261030_v2
+tar -xzf ~/Desktop/kwt_sram_datasheets_20261030_v2.tar.gz -C ~/soc/kwt_sram_datasheets_20261030_v2
+bash ~/soc/kwt_sram_datasheets_20261030_v2/tools/read_kwt_sram_datasheets.sh
+```
+
+服务器输出中的 `DATASHEET_LINE_*` 为带原全文行号的摘录；`REPORT_DIR` 指向
+完整文本与 `summary.txt`。若需读取其他宏，加 `--macro RAMTP128X16` 等参数；
+若需更多文档可加 `--max-docs 4`。
+
+首次运行 `kwt_sram_datasheets_20261030_143215_r5bKeh` 已确认目录中有 28 个文件，
+当前 TT 文件是 `RAMTP1024X16_tt_1p10v_1p10v_25c.ps`。v1 未实现 PostScript
+转换，正确返回 `EXTRACTION_INCOMPLETE`，未取得正文。v2 已用本地真实
+Ghostscript 10.06 转换两页 PS 测试文档通过，另验证转换器失败、空/残留输出
+不会被当作成功；仍待服务器真实宏数据手册的转换结果。
+
+独立约束源为 `syn/kwt_encoder_12.sdc`，新综合由 `dc_compact.tcl` 读取。
+它显式列出 6.667 ns 时钟、setup/hold 各 1 ns、0.2 ns transition、输入输出
+min/max 各 0.5 ns 及输出 load 0.02（库电容单位），与原基线等价；
+不添加 false path、multicycle、disable timing 或复位例外。
+当前保留历史基线 hold FAIL；数据手册核对完成后才冻结最终提交约束。
+已有 DDC 恢复和只读审计继续使用检查点内约束，不重新加载此 SDC。
+
+当前综合面积来自标准单元与 SRAM **Liberty cell area**；LEF 的 SIZE 用于
+物理尺寸及面积交叉核对，不能混称为现有 DC 面积数据的来源。
+SMIC 工艺规则手册留作工艺规则核对，当前优先读取具体 RAMTP 宏的数据手册。
+
 读取本轮最差 hold 路径（只读，不需重跑综合）：
 
 ```bash
@@ -272,7 +390,8 @@ bash ~/soc/kwt_sram_binding_20261029_v2/tools/run_kwt_sram_binding.sh --synth
 1. 校验包内 SHA256 清单，在 `~/soc/kwt_sram_<时间>_<随机>/` 创建隔离快照。
 2. 用官方 `RAMTP128X16.v` / `RAMTP1024X16.v` 依次验证适配层、打包层和十二层编码器。
 3. RTL 功能仿真关闭 specify timing checks，保留模型内部传播延迟、保持模式和
-   碰撞检查；**不定义 `ARM_UD_MODEL`，不以自编模型替换官方模型**。
+   内部碰撞逻辑；其中 specify 形式的碰撞时序检查也被关闭，故该回归不能证明
+   碰撞窗口安全。**不定义 `ARM_UD_MODEL`，不以自编模型替换官方模型**。
    这种无 SDF 的理想 RTL 仿真不判断物理 setup/hold。
 4. 三套测试均有明确 PASS 标记，十二层还必须满足 6,336 输出和 3,232,909 拍，
    才继续生成 TT 1.1V/25C 的私有 DB。
@@ -282,7 +401,8 @@ bash ~/soc/kwt_sram_binding_20261029_v2/tools/run_kwt_sram_binding.sh --synth
    输出包含 SRAM 的面积、TT setup/hold slack 和各项状态。
 
 只跑基础存储测试可加 `--suite unit`，不能同时要求 `--synth`。
-默认完整回归使用 VCS；编译超时 900 秒、每套仿真超时 3,600 秒，综合超时 14,400 秒。
+旧 v2 完整回归使用 VCS；编译超时 900 秒、每套仿真超时 3,600 秒，综合超时 14,400 秒。
+当前半拍候选增加开启时序检查的短测试，综合上限改为 1,800 秒，不执行全局 hold 修复。
 脚本打印每个阶段的 RUN / PASS。编译失败时打印第一条诊断及上下文，
 仿真失败时打印日志尾部，保留完整日志和工作目录，
 编译器或 `$finish` 返回 0 也不能代替 testbench 的 PASS。
@@ -353,7 +473,7 @@ python ~/soc/sram_controls_20261029/inspect_kwt_sram_controls.py
 结构已实现；得到实际控制信息后补全 `kwt_sram_pins.vh` 并验证，不推测有效电平：
 
 1. 确认读/写端口、时钟边沿、地址及数据位宽、CEN/WEN/写掩码极性和测试脚固定值。
-2. 确认读延迟是一拍；实际模型同址读写即使输出 X，也不能破坏打包层 forwarding。
+2. 确认读延迟是一拍，同时满足物理端口间隔；不能仅以 forwarding 掩盖不保证写入的碰撞。
 3. ASIC 综合读取匹配工艺角的宏 DB；宏只放入 link library，避免自动映射成错误存储。
    没有 DB、宏未 link 或位宽不匹配时应报错，不能继续产生“达标”摘要。
 4. 先用实际宏 Verilog 模型运行三种深度的 `tb_kwt_packed_sram`（若库含相应规格），
