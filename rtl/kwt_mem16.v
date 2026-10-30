@@ -1,7 +1,8 @@
 `timescale 1ns / 1ps
 // Macro boundary: one synchronous read port and one full-word write port.
-// Define KWT_ASIC_SRAM and supply kwt_foundry_sram16 with this interface to
-// bind the supplied 128/1024/4096-deep foundry macros. No inferred bit masks.
+// KWT_ASIC_SRAM selects kwt_foundry_sram16 and a verified kwt_sram_pins.vh.
+// 4096 words use four 1024-word RAMTP banks (no 4096-word RAMTP was supplied).
+// No inferred bit masks. See doc/SRAM宏绑定操作.md for current validation status.
 module kwt_mem16 #(parameter DEPTH=128, parameter AW=$clog2(DEPTH)) (
     input wire clk, input wire we, input wire [AW-1:0] wa,
     input wire [15:0] wd, input wire [AW-1:0] ra,

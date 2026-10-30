@@ -56,6 +56,8 @@ tb_pre_sram/
 # 每个目录含 28~30 MB 的 .dcp，可随时用 syn/run_*.tcl 重新生成
 syn/out/
 syn/compact_*/
+syn/sram_db/
+dc_out_bound/
 
 # E203 平台参考代码（外部克隆，不纳入版本管理）
 external/e203_hbirdv2/

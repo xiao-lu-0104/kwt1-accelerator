@@ -1,134 +1,245 @@
-# ---------------------------------------------------------------------------
-# KWT-1 encoder ASIC synthesis - SMIC 40nm (SCC40NLL_VHSC40_RVT)
-#
-#   dc_shell -f syn/dc_compact.tcl | tee syn/dc_compact.log
-#
-# 顶层 kwt_encoder_12，COMPACT=1，四路 Softmax。
-# 目标 150 MHz（周期 6.667 ns，另留 1.0 ns 时钟不确定性）。
-# ---------------------------------------------------------------------------
-
-set DESIGN   kwt_encoder_12
-set CLK_PER  6.667
-set REPORT   ./dc_out
-
-# ---- 库路径（服务器上已解压的位置） ---------------------------------------
-# 注意：Tcl 里环境变量是 $::env(HOME)，写成 $env(HOME) 会变成空字符串，
-#       target_library 静默失效，DC 回退到 gtech（无面积信息）。这里用绝对路径。
-set LIBROOT  /storage1/2026contest/server1/s1_12usr/lib/S40/smic
-set STDCELL  $LIBROOT/SCC40NLL_VHSC40_RVT_V0.1/SCC40NLL_VHSC40_RVT_V0p1
-set LIBDIR   $STDCELL/liberty/1.1v
-set SRAMDIR  /storage1/admin_public_dir/SRAM_Lib_2025
-
-if {![file exists $LIBDIR/scc40nll_vhsc40_rvt_tt_v1p1_25c_ccs.db]} {
-    puts "ERROR: library db not found at $LIBDIR"
-    exit 1
+# ASIC synthesis with actual RAMTP timing/area models.
+# First: lc_shell -f syn/compile_kwt_sram_libs.tcl
+# Requires verified kwt_sram_pins.vh in KWT_SRAM_CONFIG_DIR (default below).
+# Run: dc_shell -f syn/dc_compact.tcl
+# TT result is a synthesis check, not a worst-corner / physical timing signoff.
+if {[catch {
+set ROOT [file normalize [file join [file dirname [info script]] ..]]
+if {[info exists ::env(KWT_RTL_ROOT)]} {set ROOT [file normalize $::env(KWT_RTL_ROOT)]}
+set DESIGN kwt_encoder_12
+set CLK_PER 6.667
+set fix_hold 0
+if {[info exists ::env(KWT_DC_FIX_HOLD)] && $::env(KWT_DC_FIX_HOLD) eq "1"} {
+    set fix_hold 1
+    if {![info exists ::env(KWT_DC_CHECKPOINT)]} {error "Hold repair requires a mapped checkpoint"}
 }
-
+set hold_pilot 0
+if {[info exists ::env(KWT_DC_PILOT_HOLD_NS)]} {
+    set pilot_hold_ns $::env(KWT_DC_PILOT_HOLD_NS)
+    if {!$fix_hold || ![string is double -strict $pilot_hold_ns]} {
+        error "Hold pilot requires checkpoint-based hold repair and an explicit numeric budget"
+    }
+    if {$pilot_hold_ns < 0 || $pilot_hold_ns >= 1} {
+        error "Hold sensitivity pilot budget must be >= 0 and < 1 ns"
+    }
+    set hold_pilot 1
+}
+set REPORT [file join $ROOT dc_out_bound]
+set DB_DIR [file join $ROOT syn sram_db]
+set CONFIG_DIR [file join $ROOT rtl]
+set LIBROOT /storage1/2026contest/server1/s1_12usr/lib/S40/smic
+set STDCELL $LIBROOT/SCC40NLL_VHSC40_RVT_V0.1/SCC40NLL_VHSC40_RVT_V0p1
+set STD_DB $STDCELL/liberty/1.1v/scc40nll_vhsc40_rvt_tt_v1p1_25c_ccs.db
+if {[info exists ::env(KWT_SRAM_DB_DIR)]} {set DB_DIR $::env(KWT_SRAM_DB_DIR)}
+if {[info exists ::env(KWT_SRAM_CONFIG_DIR)]} {set CONFIG_DIR $::env(KWT_SRAM_CONFIG_DIR)}
+if {[info exists ::env(KWT_DC_REPORT_DIR)]} {set REPORT $::env(KWT_DC_REPORT_DIR)}
+if {[info exists ::env(KWT_STDCELL_DB)]} {set STD_DB $::env(KWT_STDCELL_DB)}
+set SRAM_DB [file join $DB_DIR RAMTP1024X16_tt_1p10v_1p10v_25c.db]
+foreach required [list $STD_DB $SRAM_DB [file join $CONFIG_DIR kwt_sram_pins.vh]] {
+    if {![file exists $required]} {error "Required verified binding input missing: $required"}
+}
 file mkdir $REPORT
-
-# ---- 库 -------------------------------------------------------------------
-# typical 角用于综合；SS 角用于最终的 setup 分析
-set target_library [list \
-    $LIBDIR/scc40nll_vhsc40_rvt_tt_v1p1_25c_ccs.db ]
-
-set link_library [concat "*" $target_library]
-
-# SRAM 宏走黑盒路线（见下方 analyze 的 -define），这里不读 SRAM 的 lib/db。
-# 拿到 SRAM_Lib_2025 里各宏的 tt 角后，可把 .db 加进 target_library 并用真实
-# 宏替换 kwt_foundry_sram16，那时 SRAM 的时序和面积会自动进报告。
-
-# ---- 源码 -----------------------------------------------------------------
-set RTL [glob ./rtl/*.v]
+set target_library [list $STD_DB]
+# Link-only SRAM: never infer storage or map combinational logic into it.
+set link_library [concat [list *] $target_library [list $SRAM_DB]]
+set_app_var search_path [concat $search_path [list $CONFIG_DIR [file join $ROOT rtl]]]
 set_app_var verilogout_no_tri true
-define_design_lib WORK -path $REPORT/work
-
-# 关键：定义 KWT_ASIC_SRAM，让 kwt_mem16 走 kwt_foundry_sram16 宏实例分支，
-# 而不是 reg [15:0] mem[0:DEPTH-1] 行为数组。那个模块不在 RTL 里，link 会
-# 自动建成黑盒（面积 0），SRAM 的真实面积和访问延迟另外补。
-#
-# 教训：之前用 set_dont_touch [get_designs kwt_mem16] 完全挡不住 ——
-# kwt_packed_sram 把内存按 16 位 bank 展开成 101 个参数化实例，design 名
-# 根本不叫 kwt_mem16，结果 786,432 bit 全被映射成 615,938 个触发器，
-# 面积虚高到 5.10 mm^2，还白跑了 3 小时。
-analyze -format sverilog -define KWT_ASIC_SRAM -library WORK $RTL
-elaborate $DESIGN -library WORK -architecture verilog
-current_design $DESIGN
-
-link
-
-set _sram [get_cells -hierarchical -filter "ref_name =~ kwt_foundry_sram16*"]
-puts " INFO      : SRAM black boxes = [sizeof_collection $_sram]"
-
-# ---- 约束 -----------------------------------------------------------------
-create_clock -name clk -period $CLK_PER [get_ports clk]
-set_clock_uncertainty 1.0 [get_clocks clk]
-set_clock_transition  0.2 [get_clocks clk]
-
-# 输入/输出延迟：加速器内部到 SRAM 的信号按 0.5 ns 估
-set_input_delay  -clock clk 0.5 [remove_from_collection [all_inputs] [get_ports clk]]
-set_output_delay -clock clk 0.5 [all_outputs]
-set_load 0.02 [all_outputs]
-
-# 黑盒没有时序模型，不给边界延迟的话穿越 SRAM 的路径会被当成 0 延迟，
-# WNS 会严重偏乐观。按 40nm 1024x16 宏的典型值补上。
-if {[sizeof_collection $_sram] > 0} {
-    catch {set_output_delay -clock clk 1.2 [get_pins -of_objects $_sram -filter "direction == out"]}
-    catch {set_input_delay  -clock clk 0.3 [get_pins -of_objects $_sram -filter "direction == in"]}
-    puts " INFO      : SRAM modeled as 1.2 ns access / 0.3 ns setup"
+define_design_lib WORK -path [file join $REPORT work]
+set resume 0
+if {[info exists ::env(KWT_DC_CHECKPOINT)]} {
+    set checkpoint [file normalize $::env(KWT_DC_CHECKPOINT)]
+    if {![file exists $checkpoint]} {error "Compiled checkpoint missing: $checkpoint"}
+    read_ddc $checkpoint
+    set resume 1
+    puts "RESUME_CHECKPOINT: $checkpoint"
+} else {
+    analyze -format sverilog -define KWT_ASIC_SRAM -library WORK [glob [file join $ROOT rtl *.v]]
+    elaborate $DESIGN -library WORK -architecture verilog
 }
+current_design $DESIGN
+if {![link]} {error "Link failed; refusing incomplete SRAM area/timing reports"}
 
-# 不用 set_max_area 0：它会逼 DC 无限逼近最小面积，实测把综合时间从
-# 分钟级拉长到 3 小时以上，面积收益不到 2%。用默认 area effort。
+set macro_lib [get_lib_cells -quiet */RAMTP1024X16]
+if {[sizeof_collection $macro_lib] != 1} {error "Expected exactly one RAMTP1024X16 library cell"}
+set macro_area [get_attribute $macro_lib area]
+if {$macro_area <= 0} {error "RAMTP1024X16 has no positive library area"}
+foreach clock_pin {CLKA CLKB} {
+    set pins [get_lib_pins -quiet */RAMTP1024X16/$clock_pin]
+    if {[sizeof_collection $pins] != 1} {error "Macro clock pin $clock_pin absent from timing library"}
+}
+set macros [get_cells -hierarchical -filter {ref_name == RAMTP1024X16}]
+if {[sizeof_collection $macros] != 40} {
+    error "Default encoder needs 40 physical RAMTP1024X16 cells; got [sizeof_collection $macros]"
+}
+set_dont_touch $macros true
 
-# ---- 综合 -----------------------------------------------------------------
-compile_ultra -no_autoungroup
-
-# ---- 报告 -----------------------------------------------------------------
-report_qor                        > $REPORT/qor.rpt
-report_area -hierarchy            > $REPORT/area.rpt
-report_area                       > $REPORT/area_total.rpt
-report_timing -max_paths 20 -delay_type max > $REPORT/timing_max.rpt
-report_timing -max_paths 10 -delay_type min > $REPORT/timing_min.rpt
-report_power                      > $REPORT/power.rpt
-report_clock_gating               > $REPORT/clock_gating.rpt
-report_constraint -all_violators   > $REPORT/violators.rpt
-check_design                      > $REPORT/check_design.rpt
-
-# ---- 输出 -----------------------------------------------------------------
+if {!$resume} {
+    create_clock -name clk -period $CLK_PER [get_ports clk]
+    set_clock_uncertainty 1.0 [get_clocks clk]
+    set_clock_transition 0.2 [get_clocks clk]
+    set_input_delay -clock clk 0.5 [remove_from_collection [all_inputs] [get_ports clk]]
+    set_output_delay -clock clk 0.5 [all_outputs]
+    set_load 0.02 [all_outputs]
+    # Use actual macro timing, without estimated hierarchical pin delays.
+    compile_ultra -no_autoungroup
+    # Save BEFORE validation/reporting, so a reporting error can be recovered
+    # without repeating synthesis. DDC retains the mapped design/constraints.
+    write -hierarchy -format ddc -output $REPORT/${DESIGN}_compiled.ddc
+    write_sdc -nosplit $REPORT/${DESIGN}_compiled.sdc
+} else {
+    set clocks [get_clocks -quiet clk]
+    if {[sizeof_collection $clocks] != 1} {error "Checkpoint missing the constrained clk clock"}
+    set period [get_attribute $clocks period]
+    if {abs($period-$CLK_PER) > 0.000001} {error "Checkpoint clock period differs from $CLK_PER ns"}
+}
+if {![link]} {error "Post-compile link failed"}
+if {$hold_pilot} {
+    # This exploratory budget is not a replacement for the original baseline.
+    # Keep the old failure and original SDC visible; export only into pilot dir.
+    set original_setup [get_timing_paths -delay_type max -max_paths 1]
+    set original_hold [get_timing_paths -delay_type min -max_paths 1]
+    if {[sizeof_collection $original_setup] == 0 || [sizeof_collection $original_hold] == 0} {
+        error "Missing original constrained setup/hold paths"
+    }
+    set original_setup_wns [get_attribute $original_setup slack]
+    set original_hold_wns [get_attribute $original_hold slack]
+    write_sdc -nosplit $REPORT/original_baseline.sdc
+    report_timing -delay_type min -max_paths 10 -significant_digits 6 > $REPORT/original_baseline_hold.rpt
+    puts "CONSTRAINT_SCOPE: PILOT_ONLY; hold budget is an engineering hypothesis, not an official constraint"
+    puts "ORIGINAL_SETUP_WNS: $original_setup_wns ns"
+    puts "ORIGINAL_HOLD_WNS: $original_hold_wns ns"
+    set original_hold_status FAIL
+    if {$original_hold_wns >= 0} {set original_hold_status PASS}
+    puts "ORIGINAL_HOLD_STATUS: $original_hold_status (original checkpoint, original constraints)"
+    puts "PILOT_HOLD_UNCERTAINTY: $pilot_hold_ns ns; setup and IO constraints retained"
+    set_clock_uncertainty -hold $pilot_hold_ns [get_clocks clk]
+    set pilot_setup [get_timing_paths -delay_type max -max_paths 1]
+    if {abs([get_attribute $pilot_setup slack] - $original_setup_wns) > 0.000001} {
+        error "Setup WNS changed while applying hold-only pilot budget"
+    }
+}
+if {$fix_hold} {
+    # Compare serialized timing budgets before/after optimization. The only
+    # added constraint attribute is fix_hold; no further budget changes. In
+    # pilot mode the explicitly labelled trial budget was applied just above.
+    proc kwt_sdc_timing_budget {path} {
+        set fp [open $path r]
+        set text [read $fp]
+        close $fp
+        regsub -all {\\\r?\n[ \t]*} $text { } text
+        set signature {}
+        foreach line [split $text "\n"] {
+            set line [string trim $line]
+            if {[regexp {^(create_clock|create_generated_clock|set_clock_uncertainty|set_clock_latency|set_clock_transition|set_input_delay|set_output_delay|set_input_transition|set_driving_cell|set_load|set_false_path|set_multicycle_path|set_min_delay|set_max_delay|set_disable_timing|set_case_analysis|set_ideal_network|set_propagated_clock)\s} $line]} {
+                lappend signature $line
+            }
+        }
+        return [lsort $signature]
+    }
+    set before_setup [get_timing_paths -delay_type max -max_paths 1]
+    set before_hold [get_timing_paths -delay_type min -max_paths 1]
+    if {[sizeof_collection $before_setup] == 0 || [sizeof_collection $before_hold] == 0} {
+        error "Missing constrained setup/hold paths in checkpoint"
+    }
+    puts "HOLD_BEFORE_SETUP_WNS: [get_attribute $before_setup slack]"
+    puts "HOLD_BEFORE_WNS: [get_attribute $before_hold slack]"
+    report_timing -delay_type max -max_paths 10 -significant_digits 6 > $REPORT/setup_before_hold.rpt
+    report_timing -delay_type min -max_paths 20 -significant_digits 6 > $REPORT/hold_before.rpt
+    report_area > $REPORT/area_before_hold.rpt
+    write_sdc -nosplit $REPORT/hold_before.sdc
+    set budget_before [kwt_sdc_timing_budget $REPORT/hold_before.sdc]
+    set_fix_hold [get_clocks clk]
+    # Synopsys DC User Guide U-2022.12-SP3, "Disabling the Cost Function": use compile for
+    # -only_hold_time; compile_ultra does not support this option.
+    compile -incremental_mapping -only_hold_time
+    write -hierarchy -format ddc -output $REPORT/${DESIGN}_hold_attempt.ddc
+    write_sdc -nosplit $REPORT/hold_after.sdc
+    if {[kwt_sdc_timing_budget $REPORT/hold_after.sdc] ne $budget_before} {
+        error "Timing budget changed during hold repair; inspect hold_before.sdc and hold_after.sdc"
+    }
+    if {![link]} {error "Post-hold-repair link failed"}
+}
+set macros [get_cells -hierarchical -filter {ref_name == RAMTP1024X16}]
+if {[sizeof_collection $macros] != 40} {error "SRAM count changed during synthesis"}
+foreach_in_collection cell [get_cells -hierarchical -filter {is_hierarchical == false}] {
+    set reference [get_attribute $cell ref_name]
+    # DC represents tied-low/high nets with built-in constant pseudo-cells.
+    # These exact two names are not Liberty cells. Keep all other references
+    # subject to the real-library check (including GTECH and missing macros).
+    if {$reference eq {**logic_0**} || $reference eq {**logic_1**}} {continue}
+    if {[sizeof_collection [get_lib_cells -quiet */$reference]] == 0} {
+        error "Unmapped/unresolved leaf [get_object_name $cell], reference $reference"
+    }
+}
+report_reference -hierarchy > $REPORT/references.rpt
+report_qor > $REPORT/qor.rpt
+report_area -hierarchy > $REPORT/area.rpt
+report_area > $REPORT/area_total.rpt
+report_timing -max_paths 20 -delay_type max -significant_digits 6 > $REPORT/timing_max.rpt
+report_timing -max_paths 10 -delay_type min -significant_digits 6 > $REPORT/timing_min.rpt
+set macro_outputs [get_pins -of_objects $macros -filter {direction == out}]
+if {[sizeof_collection $macro_outputs] == 0} {error "No macro read-data pins found"}
+set macro_paths [get_timing_paths -through $macro_outputs -max_paths 1]
+if {[sizeof_collection $macro_paths] == 0} {error "No constrained path through macro read outputs"}
+report_timing -through $macro_outputs -max_paths 20 > $REPORT/timing_sram_read.rpt
+check_timing > $REPORT/check_timing.rpt
+report_power > $REPORT/power_estimate_no_saif.rpt
+report_clock_gating > $REPORT/clock_gating.rpt
+report_constraint -all_violators > $REPORT/violators.rpt
+check_design > $REPORT/check_design.rpt
 write -hierarchy -format verilog -output $REPORT/${DESIGN}_netlist.v
 write_sdc -nosplit $REPORT/${DESIGN}.sdc
 write_sdf -version 3.0 $REPORT/${DESIGN}.sdf
 write -hierarchy -format ddc -output $REPORT/${DESIGN}.ddc
 
-# ---- 摘要 -----------------------------------------------------------------
-# 坑：get_attribute [current_design] area 实测返回空串（上一轮就是这样把面积
-# 打成 <unavailable> 的）。直接从 area_total.rpt 里正则抠数字最稳。
-set area ""
-set nff  ""
-if {[file exists $REPORT/area_total.rpt]} {
-    set fp [open $REPORT/area_total.rpt r]
-    set txt [read $fp]
-    close $fp
-    regexp {Total cell area:\s+([0-9.]+)}         $txt -> area
-    regexp {Number of sequential cells:\s+([0-9]+)} $txt -> nff
+set fp [open $REPORT/area_total.rpt r]
+set text [read $fp]
+close $fp
+if {![regexp {Total cell area:\s+([0-9.]+)} $text -> area]} {error "No total cell area in report"}
+set sram_area [expr {40 * $macro_area}]
+set paths [get_timing_paths -delay_type max -max_paths 1]
+if {[sizeof_collection $paths] == 0} {error "No constrained setup path"}
+set wns [get_attribute $paths slack]
+set area_status FAIL
+if {$area <= 2250000} {set area_status PASS}
+set setup_status FAIL
+if {$wns >= 0} {set setup_status PASS}
+set hold_paths [get_timing_paths -delay_type min -max_paths 1]
+set hold_wns unavailable
+set hold_status UNAVAILABLE
+if {[sizeof_collection $hold_paths] > 0} {
+    set hold_wns [get_attribute $hold_paths slack]
+    set hold_status FAIL
+    if {$hold_wns >= 0} {set hold_status PASS}
 }
-if {$area eq ""} { set area [get_attribute [current_design] area] }
-set wns [get_attribute [get_timing_paths -delay_type max] slack]
-puts "=================================================="
-puts " DESIGN    : $DESIGN"
-puts " LIBRARY   : SCC40NLL_VHSC40_RVT  tt_v1p1_25c_ccs"
-puts " PERIOD    : $CLK_PER ns  (150 MHz target)"
-puts " SEQ CELLS : $nff   (逻辑触发器，正常应 ~2e4；若 >5e5 说明 SRAM 又被展开了)"
-if {$area eq ""} {
-    puts " AREA      : <unavailable>"
-} else {
-    puts [format " AREA      : %.2f um^2  (%.4f mm^2)   不含 SRAM 宏" $area [expr {$area / 1.0e6}]]
+puts "================ BOUND SRAM SYNTHESIS ================"
+puts "DESIGN: $DESIGN; PERIOD: $CLK_PER ns; CORNER: TT 1.1V 25C"
+if {$hold_pilot} {
+    puts "CONSTRAINT_SCOPE: PILOT_ONLY (hold uncertainty $pilot_hold_ns ns; not original-budget closure)"
 }
-if {$wns eq ""} {
-    puts " WNS       : <unavailable>"
-} else {
-    puts [format " WNS       : %.3f ns" $wns]
+puts "SRAM_CELLS: 40 x RAMTP1024X16; CAPACITY: 80 KiB"
+puts [format "SRAM_LIBRARY_AREA: %.2f um^2" $sram_area]
+puts [format "TOTAL_CELL_AREA_INCLUDING_SRAM: %.2f um^2 (%.4f mm^2)" $area [expr {$area/1.0e6}]]
+puts "AREA_LIMIT_STATUS: $area_status (2250000 um^2 cell-area budget; physical overhead not yet included)"
+puts [format "SETUP_WNS: %.3f ns" $wns]
+puts "SETUP_STATUS: $setup_status (TT synthesis only)"
+puts "HOLD_WNS: $hold_wns"
+puts "HOLD_STATUS: $hold_status (TT synthesis only)"
+if {$fix_hold} {
+    set repair_status FAIL
+    if {$area_status eq "PASS" && $setup_status eq "PASS" && $hold_status eq "PASS"} {set repair_status PASS}
+    if {$hold_pilot} {
+        puts "PILOT_HOLD_REPAIR_STATUS: $repair_status"
+        puts "ORIGINAL_BUDGET_CLOSURE: NOT_ESTABLISHED; original baseline hold WNS $original_hold_wns ns"
+    } else {
+        puts "HOLD_REPAIR_STATUS: $repair_status"
+    }
 }
-puts " REPORTS   : $REPORT"
-puts "=================================================="
-exit
+puts "REPORTS: $REPORT"
+puts "Power has no measured activity; this run is not final power/timing signoff."
+puts "KWT_DC_COMPLETE"
+} task_error]} {
+    puts stderr "KWT_ERROR: $task_error"
+    exit 1
+}
+exit 0
