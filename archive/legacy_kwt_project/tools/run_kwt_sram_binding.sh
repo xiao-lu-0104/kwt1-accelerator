@@ -8,7 +8,8 @@ output_parent="${HOME}/soc"
 suite=full
 synthesize=0
 param_handshake=0
-usage() { echo "Usage: bash $0 [--suite unit|full] [--synth] [--param-handshake] [--sram-root DIR] [--output-parent DIR]"; }
+encoder_mmio=0
+usage() { echo "Usage: bash $0 [--suite unit|full] [--synth] [--param-handshake|--encoder-mmio] [--sram-root DIR] [--output-parent DIR]"; }
 while (($#)); do
     case "$1" in
         --suite|--sram-root|--output-parent)
@@ -19,11 +20,15 @@ while (($#)); do
             shift 2;;
         --synth) synthesize=1; shift;;
         --param-handshake) param_handshake=1; shift;;
+        --encoder-mmio) encoder_mmio=1; param_handshake=1; shift;;
         -h|--help) usage; exit 0;;
         *) usage; exit 2;;
     esac
 done
 [[ "$suite" == unit || "$suite" == full ]] || { usage; exit 2; }
+if ((encoder_mmio && synthesize)); then
+    echo 'ENV_ERROR: --encoder-mmio synthesis is not configured; existing DC flow targets the standalone core'; exit 2
+fi
 if ((synthesize)) && [[ "$suite" != full ]]; then
     echo 'ENV_ERROR: --synth requires --suite full'; exit 2
 fi
@@ -51,19 +56,31 @@ stage=setup
 trap 'rc=$?; if ((rc)); then echo "RESULT: FAIL (stage=$stage exit=$rc)"; echo "WORK_DIR: $work"; fi' EXIT
 echo "WORK_DIR: $work"
 echo "SUITE: $suite; SYNTHESIS_REQUESTED: $synthesize"
-echo 'BINDING_REVISION: 20261030_v10_parameter_handshake'
+if ((encoder_mmio)); then
+    echo 'BINDING_REVISION: 20261030_v11_encoder_mmio'
+else
+    echo 'BINDING_REVISION: 20261030_v10_parameter_handshake'
+fi
 echo "VCS: $(command -v vcs)"
 echo 'MODE: split-phase candidate; A=root rising, staged B=root falling; COLLDISN=1'
 echo 'TIMING_CHECKS: enabled for 150MHz phase test; disabled for ideal RTL adapter/packed/encoder tests'
 echo 'QUALIFICATION: internal collision logic remains enabled; ideal functional tests alone do not prove collision timing'
 echo 'MACRO_PORT_MODE: default logical interface (no explicit VDDCE/VDDPE/VSSE ports)'
-echo 'EXPECTED: 40 physical RAMTP1024X16 cells / 80 KiB; 3159181 unstalled encoder cycles (FFN length fix)'
+if ((encoder_mmio)); then
+    echo 'EXPECTED: full peripheral 44 RAMTP1024X16 cells / 88 KiB (PPA pending); 6336 golden output bytes over AXI'
+    echo 'SCOPE: AXI bus-functional master and real encoder; no E203 CPU execution in this run'
+else
+    echo 'EXPECTED: 40 physical RAMTP1024X16 cells / 80 KiB; 3159181 unstalled encoder cycles (FFN length fix)'
+fi
 mkdir -p "$work/src/rtl" "$work/src/tb" "$work/src/syn"
 cp "$package_root/rtl/"*.v "$package_root/rtl/"*.vh "$work/src/rtl/"
 cp "$package_root/tb/tb_kwt_foundry_sram16.v" "$package_root/tb/tb_kwt_packed_sram.v" \
    "$package_root/tb/tb_kwt_encoder_12.v" "$package_root/tb/tb_kwt_sram_phase.v" "$work/src/tb/"
 if ((param_handshake)); then
     cp "$package_root/tb/tb_kwt_param_stream.v" "$package_root/tb/tb_kwt_encoder_param_load.v" "$work/src/tb/"
+fi
+if ((encoder_mmio)); then
+    cp "$package_root/tb/tb_kwt_encoder_mmio.v" "$package_root/tb/tb_kwt_encoder_axi.v" "$work/src/tb/"
 fi
 cp "$package_root/syn/compile_kwt_sram_libs.tcl" "$package_root/syn/dc_compact.tcl" "$package_root/syn/kwt_encoder_12.sdc" "$work/src/syn/"
 if [[ "$suite" == full ]]; then
@@ -151,12 +168,23 @@ run_test() {
     if [[ "$top" == tb_kwt_encoder_12_stall ]] && ! grep -q '^PARAM_SERIAL_WORDS accepted=90768$' "$sim_log"; then
         tail -n 25 "$sim_log"; echo 'FAIL: stalled encoder did not consume the complete 32-bit parameter stream'; return 1
     fi
-    grep -E '^(PASS:|cycles=|PROFILE encoder_|PARAM_TRANSFER|PARAM_SERIAL_WORDS)' "$sim_log"
+    if [[ "$top" == tb_kwt_encoder_axi ]] && ! grep -Eq '^AXI_MMIO inputs=1584 parameter_words=90768 output_words=1584 core_cycles=[1-9][0-9]* peripheral_cycles=[1-9][0-9]*$' "$sim_log"; then
+        tail -n 25 "$sim_log"; echo 'FAIL: AXI encoder task did not transfer complete input/parameters/output'; return 1
+    fi
+    grep -E '^(PASS:|cycles=|PROFILE encoder_|PARAM_TRANSFER|PARAM_SERIAL_WORDS|AXI_LAYER_PARAMETERS|AXI_MMIO)' "$sim_log"
     printf '%s\tPASS\n' "$top" >> "$work/results.tsv"
 }
 memory_sources=("$work/src/rtl/kwt_foundry_sram16.v" "$work/src/rtl/kwt_mem16.v")
 run_test tb_kwt_sram_phase 'PASS: split-phase SRAM contract at 150MHz' \
     "${memory_sources[@]}" "$work/src/tb/tb_kwt_sram_phase.v"
+if ((encoder_mmio)); then
+    run_test tb_kwt_encoder_mmio 'PASS: encoder MMIO channel ordering' \
+        "$work/src/rtl/"*.v "$work/src/tb/tb_kwt_encoder_mmio.v"
+    if [[ "$suite" == full ]]; then
+        run_test tb_kwt_encoder_axi 'PASS: encoder AXI MMIO 6336 values bit-exact' \
+            "$work/src/rtl/"*.v "$work/src/tb/tb_kwt_encoder_axi.v"
+    fi
+else
 run_test tb_kwt_foundry_sram16 'PASS: all foundry adapter shapes' \
     "${memory_sources[@]}" "$work/src/tb/tb_kwt_foundry_sram16.v"
 run_test tb_kwt_packed_sram 'PASS: all SRAM shapes' \
@@ -174,6 +202,7 @@ if [[ "$suite" == full ]]; then
         run_test tb_kwt_encoder_12_stall 'PASS: 12-layer encoder 6336 values bit-exact' \
             "$work/src/rtl/"*.v "$work/src/tb/tb_kwt_encoder_12.v"
     fi
+fi
 fi
 echo "FUNCTIONAL_RESULT: PASS ($suite; fresh split-phase RTL; actual foundry Verilog, not timing signoff)"
 

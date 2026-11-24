@@ -1,0 +1,17 @@
+{
+  "itcm_base": "0x80000000",
+  "dtcm_base": "0x90000000",
+  "tcm_bytes": "0x40000",
+  "text_bytes": "0x4000",
+  "param_a_offset": "0x4000",
+  "param_b_offset": "0x0000",
+  "split_layers": 6,
+  "input_offset": "0x30000",
+  "output_offset": "0x32000",
+  "scratch_offset": "0x34000",
+  "data_offset": "0x3b800",
+  "data_bytes": "0x800",
+  "stack_bottom_offset": "0x3c000",
+  "stack_top_offset": "0x3f000",
+  "mailbox_offset": "0x3ff00"
+}
