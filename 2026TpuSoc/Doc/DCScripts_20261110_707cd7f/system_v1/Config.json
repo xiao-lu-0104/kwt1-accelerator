@@ -1,0 +1,10 @@
+{
+  "source_commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+  "accelerator_run": "tpusoc_hold_recovery_20261110_707cd7f_Bwf2gR",
+  "original_manifest_sha256": "7c5972d029bc0bc1bfc54c74d843d6b05b06413002f34799c857649388b5d535",
+  "accelerator_recovery_package_sha256": "2dfa13650e441462bc58ba6b029ccbc04213572c573e307426be7fd639ee2e04",
+  "limits_seconds": {
+    "hold_equivalence": 3600,
+    "system_dc": 7200
+  }
+}

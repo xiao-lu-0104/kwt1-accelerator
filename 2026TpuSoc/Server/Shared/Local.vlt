@@ -1,0 +1,9 @@
+`verilator_config
+// Intentionally unused CPU debug/status outputs in this functional testbench.
+lint_off -rule PINMISSING -file "*Sim/SharedTest.sv"
+// Testbench drives and observes handshakes at opposite edges.
+lint_off -rule BLKSEQ -file "*Sim/SharedTest.sv"
+// The testbench samples the asynchronous global reset as an observation gate.
+lint_off -rule SYNCASYNCNET -file "*Sim/SharedTest.sv"
+// Platform synchronized reset feeds async CPU flops and synchronous TPU flops.
+lint_off -rule SYNCASYNCNET -file "*e203_hbirdv2/rtl/e203/core/e203_reset_ctrl.v" -lines 60

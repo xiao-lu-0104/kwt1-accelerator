@@ -61,3 +61,18 @@ dc_out_bound/
 
 # E203 平台参考代码（外部克隆，不纳入版本管理）
 external/e203_hbirdv2/
+
+# External teammate checkouts and local publication workspace
+2026TpuSoc_frontend_*/
+workspace/
+.report-tools/
+.tmp*/
+*.exe
+*.ddc
+*.db
+*.ndm/
+*.nlib/
+*.saif
+*.vcd
+*.tar.gz
+*.zip

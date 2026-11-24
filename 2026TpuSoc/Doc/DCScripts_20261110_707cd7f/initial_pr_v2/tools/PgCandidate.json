@@ -1,0 +1,10 @@
+{
+  "source_commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+  "mesh_pitch_um": 42,
+  "historical_pitch_um": 84,
+  "status": "CANDIDATE_ONLY_NOT_COMPILED",
+  "requirement": "denser mesh; do not reduce foundry minimum spacing",
+  "blocking_review": "old PG had 120 floating macros per net and 939 DRC including 776 M4 spacing; require new native macro shapes and via/blockage strategy before compile",
+  "geometry_file": "MacroPgGeometry.tsv",
+  "no_connectivity_drc_ir_em_acceptance": true
+}

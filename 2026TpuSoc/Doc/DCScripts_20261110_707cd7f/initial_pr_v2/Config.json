@@ -1,0 +1,10 @@
+{
+  "source_commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+  "system_package_sha256": "4a23d28f81490b6d2de1b0d765c7138d333ce20b6bc9b1a635ff6c14905efc17",
+  "power_package_sha256": "ad2c2b42add25b802397e6737597aba994f89401136f0be8b9ebb632deee6438",
+  "scope": "current full system ICC2 import/floorplan/initial placement only; not routed",
+  "limit_seconds": 3600,
+  "io_scope": "grouped complete interfaces and ascending bus bits; native terminal coordinate/layer/order audit",
+  "pg_scope": "42um candidate only, actual PG compile follows native macro geometry review",
+  "layout_api_evidence": "user native screenshot layout_api_20261110_707cd7f_qkcBsH exit0 elapsed11s"
+}

@@ -1,0 +1,17 @@
+{
+  "source_commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+  "system_package_sha256": "4a23d28f81490b6d2de1b0d765c7138d333ce20b6bc9b1a635ff6c14905efc17",
+  "tasks": [
+    "ff1_normal_single",
+    "encoder_single_layer"
+  ],
+  "old_saif_reuse": false,
+  "limits_seconds": {
+    "prepare": 900,
+    "compile": 1800,
+    "ff1_sim": 2400,
+    "encoder_sim": 5400,
+    "power_native_per_task": 3600,
+    "power_outer_per_task": 4200
+  }
+}

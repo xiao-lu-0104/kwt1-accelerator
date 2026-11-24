@@ -1,0 +1,5 @@
+`verilator_config
+// Tool version 5.050 reports the reset-release vector at its declaration after
+// flattening. Waive ONLY this known reset synchronizer net at this source line.
+// Keep assertions enabled; do not alter RTL or waive functional/CDC checks.
+lint_off -rule SYNCASYNCNET -file "*Rtl/TpuResetSync.sv" -lines 7

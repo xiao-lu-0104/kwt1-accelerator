@@ -1,0 +1,14 @@
+{
+  "tpusoc_current_power_20261109_v1.sh": {
+    "sha256": "ad05fcd8608bded396df62f0891c28da36dec810dce17bc1c9bdff9e0da9f15f",
+    "bytes": 63778,
+    "payload_sha256": "6fe4f2c95cb319d4c1ea9488a41815f5fd0ac59fdbd40763b4270b53e5e6e458",
+    "snapshot_directory": "Initial"
+  },
+  "tpusoc_power_resume_20261109_v1.sh": {
+    "sha256": "959154034abbe81be494e7afbae986a882aac9489cc13eda6a0f0e2a89f8933a",
+    "bytes": 8527,
+    "payload_sha256": "3bd3cbcb6398db87ba338be24b3dd356c410a507ba509da99de765489a5e49c6",
+    "snapshot_directory": "Recovery"
+  }
+}

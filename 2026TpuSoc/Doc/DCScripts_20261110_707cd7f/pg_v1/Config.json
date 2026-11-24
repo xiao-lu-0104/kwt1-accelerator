@@ -1,0 +1,11 @@
+{
+  "source_commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+  "initial_package_sha256": "b4d7bb93052e9d2bd88a44b1bbe58926826a5181a825c1524ed25a1af04f686c",
+  "scope": "legalize and actual42um PG on copied new grouped-IO checkpoint; independent checks; no signal routing",
+  "limits_seconds": {
+    "legalize": 3600,
+    "pg_core": 3600,
+    "connectivity": 1800,
+    "drc": 3600
+  }
+}

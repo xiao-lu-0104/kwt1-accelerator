@@ -1,0 +1,4 @@
+{
+  "pg_manifest_sha256": "fa921ce0ec3d2436fedb7919daef93a5d4579a7b79bb1aeca16e01ca87028d68",
+  "scope": "diagnostic copy only; capture before/fixed/keepout/legalized; do not build PG or accept modified macro positions"
+}

@@ -1,0 +1,303 @@
+diff --git a/Makefile b/Makefile
+index ec6c1b8..4a184dd 100644
+--- a/Makefile
++++ b/Makefile
+@@ -50,6 +50,18 @@ firmware:
+ 	mkdir -p workspace/Sw
+ 	riscv64-unknown-elf-gcc -march=rv32imac -mabi=ilp32 -O2 -Wall -Wextra -Werror -ffreestanding -c Sw/Encoder.c -o workspace/Sw/Encoder.o
+ 
++.PHONY: ff1
++ff1: lint
++	$(Python) Model/MakeFf1Vectors.py --model $(SocModel)
++	CCACHE_DIR=$(abspath workspace/Sim/build/cache) verilator --cc --exe --assert --build -j 4 $(Warnings) --top-module TpuNice --Mdir workspace/Sim/build/ff1 $(Rtl) Rtl/TpuNice.sv $(abspath Sim/Ff1Test.cpp) -CFLAGS '-std=c++17 -O2'
++	workspace/Sim/build/ff1/VTpuNice workspace/Sim/out/Ff1/Cases.txt
++
++.PHONY: icb
++icb:
++	verilator --lint-only $(Warnings) --top-module TpuIcb Rtl/TpuIcb.sv
++	CCACHE_DIR=$(abspath workspace/Sim/build/cache) verilator --cc --exe --assert --build -j 4 $(Warnings) --top-module TpuIcb --Mdir workspace/Sim/build/icb Rtl/TpuIcb.sv $(abspath Sim/IcbTest.cpp) -CFLAGS '-std=c++17 -O2'
++	workspace/Sim/build/icb/VTpuIcb
++
+ soc-vectors:
+ 	$(Python) Model/Extract.py
+ 	mkdir -p $(SocOut)
+diff --git a/README.md b/README.md
+index 296c815..3303fec 100644
+--- a/README.md
++++ b/README.md
+@@ -8,6 +8,17 @@ FPGA 集成基线采用 **CPU 30 MHz＋TPU 100 MHz**，NICE 通过 CDC 连接。
+ 
+ 主 SRAM 为 112 KiB、56 个 16×1024 单口 bank。GELU 为七级流水，当前单层计算命令合计 1288933 周期。原 150 MHz TPU 独立实现及优化对照保留在 [Doc/GeluPipeline.md](Doc/GeluPipeline.md)。
+ 
++2026-11-04 工作区新增紧凑配置的独立 FF1：CPU 逐行计算、写回全部 `99×256`，
++保留 112 KiB 私有 SRAM。15 组本地 NICE 及真实 E203 驱动回归通过，
++正式竞赛平台的分层加载已于 11 月 5 日通过，本轮服务器综合尚待完成。
++接口与复现入口见 [独立 FF1](Doc/Ff1.md)，结果范围见 [执行记录](Server/Results/20261104_Preliminary.md)。
++
++2026-11-05 工作区新增 NICE/ICB 共享 SRAM 路径和逐拍分层加载器。
++真实 E203、LSU 与 TCM 控制器的本地十七项功能回归通过，输入/参数经总线装载，
++私有 SRAM 保持 112 KiB；服务器竞赛工程及真实私有宏功能模型十七项也已通过，
++FF1/单层/十二层完整任务分别为 332348/1485712/17501035 周期。
++接线与计时范围见 [共享 SRAM](Doc/SharedSram.md)。
++
+ 当前数值格式版本的 CPU 30 MHz＋TPU 100 MHz 十二层仿真约 **6.32 task/s**。
+ 两个测试输入的最差逐层合并 NRMSE 约 **0.242%**，不代表语音分类准确率。
+ 
+@@ -23,6 +34,7 @@ FPGA 集成基线采用 **CPU 30 MHz＋TPU 100 MHz**，NICE 通过 CDC 连接。
+ | `Backend/` | CPU＋TPU 共用 150 MHz 时钟的顶层和源码清单，NICE 直连 |
+ | `workspace/` | 构建、仿真、固件、模型派生数据和 Vivado 运行目录 |
+ | `Doc/Architecture.md` | 架构共识 |
++| `Doc/RTL架构梳理_20261109.md` | 基于当前 RTL 的模块层次、命令调度、存储、算子数据流及 AXI/ICB 集成说明 |
+ | `Doc/Implementation.md` | 当前接口、存储和数值规则 |
+ | `Doc/Validation.md` | 优化前验证基线、测量口径和限制 |
+ | `Doc/FusionResults.md` | 当前行级融合、单口 SRAM、AXI128 验证与 PPA 对照 |
+diff --git a/Rtl/TpuNice.sv b/Rtl/TpuNice.sv
+index 7af963e..fb67208 100644
+--- a/Rtl/TpuNice.sv
++++ b/Rtl/TpuNice.sv
+@@ -83,7 +83,10 @@ module TpuNice (
+                 Pending           <= Known && !IsStatus;
+                 RequestOperation  <= Function[1:0];
+                 RequestMetadata   <= Metadata;
+-                RequestAddress    <= NiceRequestSource1Data;
++                // EXEC shape 10 uses rs2 as the FF1 row index. Keep the
++                // existing address/metadata encoding for every old command.
++                RequestAddress    <= Function == 1 && Metadata[3:0] == 10
++                                   ? NiceRequestSource2Data : NiceRequestSource1Data;
+                 NiceResponseValid <= !Known || IsStatus;
+                 NiceResponseData  <= IsStatus && Known ? Status : 32'd0;
+                 NiceResponseError <= !Known;
+diff --git a/Rtl/TpuTop.sv b/Rtl/TpuTop.sv
+index 391e7cd..706cce4 100644
+--- a/Rtl/TpuTop.sv
++++ b/Rtl/TpuTop.sv
+@@ -1,7 +1,8 @@
+ module TpuTop (
+     input  logic Clock,
+     input  logic ResetN,
+-    // Op: 0 LOAD, 1 EXEC, 2 STORE. EXEC: 0..5 matrix, 6..8 vector, 9 fused FFN.
++    // Op: 0 LOAD, 1 EXEC, 2 STORE. EXEC: 0..5 matrix, 6..8 vector,
++    // 9 fused FFN, 10 standalone FF1 row (CommandAddress = row 0..98).
+     input  logic         CommandValid,
+     output logic         CommandReady,
+     input  logic [1:0]   CommandOperation,
+@@ -153,6 +154,7 @@ module TpuTop (
+             6: ElementCount = 10296;
+             7: ElementCount = 25344;
+             8: ElementCount = 6656;
++            9: ElementCount = 256;
+             default: ElementCount = 0;
+         endcase
+         CommandReadRegionMask   = 0;
+@@ -187,6 +189,17 @@ module TpuTop (
+                     Legal &= CommandSourceSlot == 0 && (CommandDestinationSlot == 1 || CommandDestinationSlot == 5)
+                           && CommandAuxiliarySlot == 6 && CommandParameterSlot == 7 && CommandBiasEnable;
+                 end
++                10: begin
++                    AuxiliaryElementCount = 16640;
++                    DestinationElementCount = 256;
++                    // Dedicated compact layout: input=0, FF1 parameters=6,
++                    // row output=1. A full 32-bit comparison rejects reserved
++                    // row bits before narrowing the offset for the MAC.
++                    Legal &= CommandAddress < 99 && CommandFraction != 0
++                          && CommandSourceSlot == 0 && CommandAuxiliarySlot == 6
++                          && CommandParameterSlot == 0 && CommandDestinationSlot == 1
++                          && CommandBiasEnable;
++                end
+                 8: begin AuxiliaryElementCount = 6336; CommandReadRegionMask |= SlotRegions(CommandParameterSlot); end
+                 default: Legal = 0;
+             endcase
+@@ -214,7 +227,8 @@ module TpuTop (
+         if (DmaBusy) Conflict |= |(CommandWriteRegionMask & (DmaReadRegionMask | DmaWriteRegionMask))
+                               || |(CommandReadRegionMask & DmaWriteRegionMask);
+         CommandReady     = !DispatchValid && (!Legal || (!Conflict && (CommandOperation == 1 ? !ComputeBusy : !DmaBusy)));
+-        MatrixStartValid = DispatchValid && DispatchOperation == 1 && DispatchShapeId < 6;
++        MatrixStartValid = DispatchValid && DispatchOperation == 1
++                         && (DispatchShapeId < 6 || DispatchShapeId == 10);
+         MatrixStartValid |= FusedState == FirstStart || FusedState == SecondStart;
+         VectorStartValid = DispatchValid && DispatchOperation == 1 && DispatchShapeId >= 6 && DispatchShapeId <= 8;
+         VectorStartValid |= FusedState == GeluStart;
+@@ -223,7 +237,8 @@ module TpuTop (
+         MatrixSourceSlot               = FusedBusy ? FusedSourceSlot : DispatchSourceSlot;
+         MatrixParameterSlot            = FusedBusy ? (MatrixShapeId == 2 ? FusedFirstParameterSlot : FusedSecondParameterSlot) : DispatchAuxiliarySlot;
+         MatrixDestinationSlot          = FusedBusy ? (MatrixShapeId == 2 ? FusedSourceSlot : FusedDestinationSlot) : DispatchDestinationSlot;
+-        MatrixSourceElementOffset      = FusedBusy ? (MatrixShapeId == 2 ? {4'b0, FusedRow, 6'b0} : 17'd7168) : 17'd0;
++        MatrixSourceElementOffset      = FusedBusy ? (MatrixShapeId == 2 ? {4'b0, FusedRow, 6'b0} : 17'd7168)
++                                      : (DispatchShapeId == 10 ? {4'b0, DispatchAddress[6:0], 6'b0} : 17'd0);
+         MatrixDestinationElementOffset = FusedBusy ? (MatrixShapeId == 2 ? 17'd7168 : {4'b0, FusedRow, 6'b0}) : 17'd0;
+         MatrixBiasEnable               = FusedBusy || DispatchBiasEnable;
+         VectorShapeId                  = FusedBusy ? 2'd1 : 2'(DispatchShapeId - 6);
+@@ -344,7 +359,7 @@ module TpuTop (
+         .ShapeId                  (MatrixShapeId),
+         .ParameterFraction        (MatrixFraction),
+         .HasBias                  (MatrixBiasEnable),
+-        .SingleRowEnable          (FusedBusy),
++        .SingleRowEnable          (FusedBusy || DispatchShapeId == 10),
+         .SourceElementOffset      (MatrixSourceElementOffset),
+         .DestinationElementOffset (MatrixDestinationElementOffset),
+         .SourceSlot               (MatrixSourceSlot),
+diff --git a/Sim/NiceTest.sv b/Sim/NiceTest.sv
+index d4fa470..0a470b1 100644
+--- a/Sim/NiceTest.sv
++++ b/Sim/NiceTest.sv
+@@ -116,6 +116,19 @@ module NiceTest;
+         Request(3, 16, 0, 0, Result);
+         assert (Result[4]) else $fatal(1, "invalid fused destination accepted");
+         Request(127, 0, 0, 1, Result);
++        // FF1 row indices must be checked at full width before using low 7 bits.
++        for (int BadRow = 0; BadRow < 3; BadRow++) begin
++            Request(1, (32'd10 << 17) | (32'd1 << 16) | (32'd1 << 13)
++                       | (32'd6 << 7) | 10,
++                    BadRow == 0 ? 32'd99 : (BadRow == 1 ? 32'd128 : 32'h80000000), 0, Result);
++            Request(3, 16, 0, 0, Result);
++            assert (Result[4] && Result[1:0] == 0)
++                else $fatal(1, "invalid FF1 row reached compute");
++        end
++        Request(1, (32'd10 << 17) | (32'd1 << 16) | (32'd5 << 13)
++                   | (32'd6 << 7) | 10, 0, 0, Result);
++        Request(3, 16, 0, 0, Result);
++        assert (Result[4] && Result[1:0] == 0) else $fatal(1, "invalid FF1 destination accepted");
+         InjectError = 1;
+         Request(0, 32'h100, 32'h75, 0, Result);
+         // Query on the first cycle of DMA completion, before its sticky event
+diff --git a/Sim/SocTest.cpp b/Sim/SocTest.cpp
+index 9c69c14..26d058e 100644
+--- a/Sim/SocTest.cpp
++++ b/Sim/SocTest.cpp
+@@ -148,11 +148,13 @@ struct Simulation {
+ int main(int Argc, char** Argv) {
+     Verilated::commandArgs(Argc, Argv);
+     try {
+-        if (Argc != 4 && Argc != 5) throw std::runtime_error("usage: SocTest Firmware.bin VectorDirectory Layers [final]");
++        if (Argc != 4 && Argc != 5) throw std::runtime_error("usage: SocTest Firmware.bin VectorDirectory Layers [final|ff1]");
+         bool FinalOnly = Argc == 5 && std::string(Argv[4]) == "final";
+-        if (Argc == 5 && !FinalOnly) throw std::runtime_error("unknown simulation mode");
++        bool Ff1 = Argc == 5 && std::string(Argv[4]) == "ff1";
++        if (Argc == 5 && !FinalOnly && !Ff1) throw std::runtime_error("unknown simulation mode");
+         unsigned Layers = unsigned(std::stoul(Argv[3]));
+         if (Layers == 0 || Layers > 12) throw std::runtime_error("layers must be 1..12");
++        if (Ff1 && Layers != 1) throw std::runtime_error("standalone FF1 mode runs one task");
+         Simulation Sim;
+         auto Firmware = ReadFile(Argv[1]);
+         auto Parameters = ReadFile(std::string(Argv[2]) + "/Ddr.bin");
+@@ -162,6 +164,13 @@ int main(int Argc, char** Argv) {
+         std::copy(Parameters.begin(), Parameters.end(), Sim.Ddr.begin());
+         Simulation::Write(Sim.Ddr, 0xff0000, Layers, 15);
+         Simulation::Write(Sim.Ddr, 0xff0018, FinalOnly ? 0 : 1, 15);
++        if (Ff1) {
++            unsigned Fraction;
++            std::ifstream Config(std::string(Argv[2]) + "/Fraction.txt");
++            if (!(Config >> Fraction) || Fraction == 0 || Fraction > 15)
++                throw std::runtime_error("invalid FF1 parameter fraction");
++            Simulation::Write(Sim.Ddr, 0xff0018, Fraction, 15);
++        }
+         Sim.Top.ResetN = 0;
+         for (int Index = 0; Index < 8; ++Index) Sim.Tick();
+         Sim.Top.ResetN = 1;
+@@ -175,7 +184,7 @@ int main(int Argc, char** Argv) {
+                     continue;
+                 }
+                 auto Expected = ReadFile(std::string(Argv[2]) + "/Expected" + std::to_string(Checked) + ".bin");
+-                if (Expected.size() != 12672) throw std::runtime_error("invalid expected output length");
++                if (Expected.size() != (Ff1 ? 50688u : 12672u)) throw std::runtime_error("invalid expected output length");
+                 for (size_t Index = 0; Index < Expected.size(); ++Index)
+                     if (Expected[Index] != Sim.Ddr.at(0x800000 + Checked * 0x4000 + Index)) {
+                         std::ostringstream Error;
+@@ -183,8 +192,9 @@ int main(int Argc, char** Argv) {
+                         throw std::runtime_error(Error.str());
+                     }
+                 std::ofstream Actual(std::string(Argv[2]) + "/Actual" + std::to_string(Checked) + ".bin", std::ios::binary);
+-                Actual.write(reinterpret_cast<const char*>(Sim.Ddr.data() + 0x800000 + Checked * 0x4000), 12672);
+-                std::cout << "PASS CPU-controlled layer " << Checked++ << ", cycles " << Sim.Cycles << std::endl;
++                Actual.write(reinterpret_cast<const char*>(Sim.Ddr.data() + 0x800000 + Checked * 0x4000), Expected.size());
++                std::cout << (Ff1 ? "PASS CPU-controlled standalone FF1 " : "PASS CPU-controlled layer ")
++                          << Checked++ << ", cycles " << Sim.Cycles << std::endl;
+             }
+         }
+         if (Sim.Finish != 1 || Checked != Layers) {
+@@ -195,10 +205,12 @@ int main(int Argc, char** Argv) {
+                   << Simulation::Read(Sim.Ddr, 0xff0014, 4);
+             throw std::runtime_error(Error.str());
+         }
+-        unsigned Stores = FinalOnly ? 1 : Layers;
+-        if (Sim.NiceCount[0] != 1 + 8 * Layers || Sim.NiceCount[1] != 10 * Layers || Sim.NiceCount[2] != Stores)
++        unsigned Stores = Ff1 ? 99 : (FinalOnly ? 1 : Layers);
++        if (Sim.NiceCount[0] != (Ff1 ? 2 : 1 + 8 * Layers)
++            || Sim.NiceCount[1] != (Ff1 ? 99 : 10 * Layers) || Sim.NiceCount[2] != Stores)
+             throw std::runtime_error("CPU custom instruction counts differ from the encoder program");
+-        if (Sim.DdrBus.ReadBytes != 12672 + 99584 * Layers || Sim.DdrBus.WriteBytes != 12672 * Stores)
++        if (Sim.DdrBus.ReadBytes != (Ff1 ? 45952 : 12672 + 99584 * Layers)
++            || Sim.DdrBus.WriteBytes != (Ff1 ? 50688 : 12672 * Stores))
+             throw std::runtime_error("unexpected DMA traffic");
+         std::cout << "PASS E203 + TPU: layers " << Layers << ", cycles " << Sim.Cycles
+                   << ", CPU cycles " << Sim.CpuCycles << ", LOAD " << Sim.NiceCount[0] << ", EXEC " << Sim.NiceCount[1]
+@@ -206,6 +218,7 @@ int main(int Argc, char** Argv) {
+                   << ", DMA read bytes " << Sim.DdrBus.ReadBytes << ", write bytes " << Sim.DdrBus.WriteBytes << std::endl;
+         std::cout << "Clock profile: TPU 100 MHz, CPU 30 MHz" << std::endl;
+         Sim.DdrBus.Report();
++        if (Ff1) std::cout << "FF1_SCOPE: real E203 firmware; local preloaded AXI memory model, not competition SRAM integration" << std::endl;
+         return 0;
+     } catch (const std::exception& Error) {
+         std::cerr << "FAIL: " << Error.what() << std::endl;
+diff --git a/Sw/Encoder.c b/Sw/Encoder.c
+index f6a7b34..2d92793 100644
+--- a/Sw/Encoder.c
++++ b/Sw/Encoder.c
+@@ -57,3 +57,24 @@ int TpuRunLayer(const TpuLayerParams *Params) {
+     if (Execute(9, 0, 6, 7, 1, 1, Fraction(Params, 5), Fraction(Params, 6))) return -1;
+     return Norm(Params->Norm2, Fraction(Params, 7));
+ }
++
++// The 99x256 output never needs to reside in private SRAM simultaneously.
++// Wait for every row's final bus write response before reusing output slot 1.
++int TpuRunFf1(uint32_t InputAddress, uint32_t ParameterAddress,
++              uint32_t OutputAddress, uint32_t ParameterFraction) {
++    if (((InputAddress | ParameterAddress | OutputAddress) & 15)
++        || ParameterFraction == 0 || ParameterFraction > 15
++        || OutputAddress > UINT32_MAX - 50687 || (TpuStatus(0) & 3)) return -1;
++    TpuStatus(0x3c);
++    TpuLoad(InputAddress, 0, 0);
++    if (TpuWait(2)) return -1;
++    TpuLoad(ParameterAddress, 3, 6);
++    if (TpuWait(2)) return -1;
++    for (uint32_t Row = 0; Row < 99; ++Row) {
++        TpuExecFf1Row(Row, ParameterFraction);
++        if (TpuWait(1)) return -1;
++        TpuStore(OutputAddress + Row * 512, 9, 1);
++        if (TpuWait(2)) return -1;
++    }
++    return 0;
++}
+diff --git a/Sw/Encoder.h b/Sw/Encoder.h
+index 84efc1d..480a458 100644
+--- a/Sw/Encoder.h
++++ b/Sw/Encoder.h
+@@ -10,5 +10,7 @@ typedef struct {
+ } TpuLayerParams;
+ 
+ int TpuRunLayer(const TpuLayerParams *Params);
++int TpuRunFf1(uint32_t InputAddress, uint32_t ParameterAddress,
++              uint32_t OutputAddress, uint32_t Fraction);
+ 
+ #endif
+diff --git a/Sw/Tpu.h b/Sw/Tpu.h
+index 8274c73..934afeb 100644
+--- a/Sw/Tpu.h
++++ b/Sw/Tpu.h
+@@ -31,6 +31,16 @@ static inline uint32_t TpuStore(uint32_t Address, uint32_t Spec, uint32_t Slot)
+     return Result;
+ }
+ 
++// Standalone FF1: one 64->256 row, using compact slots 0/6/1.
++// Row is deliberately not masked: invalid upper bits must reach RTL checks.
++static inline uint32_t TpuExecFf1Row(uint32_t Row, uint32_t Fraction) {
++    uint32_t Result;
++    uint32_t Meta = 10 | (6 << 7) | (1 << 13) | (1 << 16) | (Fraction << 17);
++    __asm__ volatile (".insn r 0x7b, 7, 1, %0, %1, %2"
++        : "=r"(Result) : "r"(Meta), "r"(Row) : "memory");
++    return Result;
++}
++
+ // Bits 0..5: compute busy, DMA busy, compute done, DMA done, command error, DMA error.
+ // Bits 2..5 in ClearMask are write-one-to-clear; return value is before clear.
+ static inline uint32_t TpuStatus(uint32_t ClearMask) {

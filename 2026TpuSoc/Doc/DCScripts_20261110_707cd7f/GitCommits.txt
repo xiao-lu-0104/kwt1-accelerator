@@ -1,0 +1,35 @@
+commit 707cd7f4a0a4d416d11bac71112980079e0a9d34
+Author:     youjun <2478055924@qq.com>
+AuthorDate: Tue Nov 10 09:55:29 2026 +0800
+Commit:     youjun <2478055924@qq.com>
+CommitDate: Tue Nov 10 09:55:29 2026 +0800
+
+    full pref version
+
+commit 4724d09dfb2f52e446978499c28f9131b5b37ab6
+Author:     youjun <2478055924@qq.com>
+AuthorDate: Tue Nov 10 09:20:01 2026 +0800
+Commit:     youjun <2478055924@qq.com>
+CommitDate: Tue Nov 10 09:20:01 2026 +0800
+
+    Rebalance FF1 tiles and prefetch inputs across tasks
+    
+    Use 32+32+28+7 row blocks and reuse buffer prefixes for ready next-task inputs while bounded tail regions hold current outputs. Add tail addressing to EXEC and STORE without increasing SRAM or MAC count.
+    
+    Record 0.45947 ms single-task cold latency and 2305.76788 tasks/s for twelve-task batches including all input/parameter loads and final writeback. Keep the twelve-layer encoder at 40.80097 tasks/s.
+    
+    Validation: full RTL and official-parameter regressions, delayed SRAM, real E203 batches, slow/fast DDR, CDC simulation, error injection, precision and roofline checks, and standalone FPGA 150 MHz timing. Preserve reproducible sweep scripts and update current-state documentation.
+
+commit b266081a5db96532b2da6239d25b167480810fce
+Author:     youjun <2478055924@qq.com>
+AuthorDate: Tue Nov 10 00:34:01 2026 +0800
+Commit:     youjun <2478055924@qq.com>
+CommitDate: Tue Nov 10 00:34:01 2026 +0800
+
+    Improve TPU throughput with vector pairs and DMA overlap
+    
+    Process vector elements in pairs, alternate FF1 output buffers, and prefetch encoder parameters with the existing DMA and physical scoreboard.
+    
+    Record the current 150 MHz cycle-simulation results: 40.80097 twelve-layer tasks/s and 2139.50525 cold FF1 tasks/s. Document unchanged precision and the matching standalone FPGA implementation.
+    
+    Validation: arithmetic/NICE/AXI/vector/DMA, official parameters and scale switching, legacy and delayed SRAM, real E203 inference and FF1, slow DDR, 30/100 MHz CDC simulation, roofline accounting, and standalone FPGA 150 MHz timing.

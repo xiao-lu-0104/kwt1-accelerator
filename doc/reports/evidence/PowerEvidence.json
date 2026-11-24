@@ -1,0 +1,18 @@
+{
+  "source": "user server screenshot 2026-11-13 23:22",
+  "source_commit": "6bb1bea04c4dbf9456a8362be237ad68a8f7bfd6",
+  "scope": "complete hardware configuration; not independent FFN-only hardware",
+  "ff1": {
+    "system_mW": 41.293945900000004,
+    "accelerator_mW": 32.62223900000001,
+    "system_uJ": 59.8704523766209
+  },
+  "encoder": {
+    "system_mW": 41.687711199999995,
+    "accelerator_mW": 33.240223,
+    "system_uJ": 199.994055300564
+  },
+  "duration_method": "system_uJ / system_mW gives milliseconds",
+  "summary_server_path": "/tmp/final_power_6bb1bea_11012/PowerSummary.json",
+  "status": "COLD_TASK_POWER_REPORTS_COMPLETE_REVIEW_COVERAGE"
+}

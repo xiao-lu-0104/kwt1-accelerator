@@ -1,0 +1,17 @@
+{
+  "itcm_base": "0x80000000",
+  "dtcm_base": "0x90000000",
+  "tcm_bytes": 262144,
+  "mailbox": "0x90000000",
+  "input": "0x90001000",
+  "output": "0x90005000",
+  "parameters": "0x90015000",
+  "work": "0x90035000",
+  "input_bytes": 12672,
+  "parameters_capacity": 131072,
+  "output_capacity": 65536,
+  "parameter_groups": [
+    ["Query", 8192], ["Key", 8192], ["Value", 8192], ["Output", 8320],
+    ["Norm1", 256], ["Ff1", 33280], ["Ff2", 32896], ["Norm2", 256]
+  ]
+}

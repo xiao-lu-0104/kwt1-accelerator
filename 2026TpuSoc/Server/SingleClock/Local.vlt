@@ -1,0 +1,9 @@
+`verilator_config
+// The backend wrapper intentionally omits unused CPU output ports.
+lint_off -rule PINMISSING -file "*Backend/E203TpuBackend.sv"
+// Shared synchronized reset drives asynchronous CPU and synchronous TPU resets.
+lint_off -rule SYNCASYNCNET -file "*Backend/E203TpuBackend.sv"
+// Functional-only test double; true macro timing is checked by server Liberty STA.
+lint_off -rule ASSIGNDLY -file "*Server/Backend/LocalRamspFixture.sv"
+// Existing upstream simulation-only arithmetic reference: 32-to-33-bit extension.
+lint_off -rule WIDTHEXPAND -file "*e203_hbirdv2/rtl/e203/core/e203_exu_alu_muldiv.v" -lines 591-597

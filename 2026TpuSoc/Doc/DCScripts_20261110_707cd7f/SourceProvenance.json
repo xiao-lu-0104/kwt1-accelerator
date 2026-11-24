@@ -1,0 +1,72 @@
+{
+  "frontend_revision": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+  "baseline": "c03eb048481b7d271dba54e518092c2eb9aa528f",
+  "top": "e203_subsys_nice_core",
+  "expected_private_macros": 56,
+  "macro_basis": "unchanged TpuSram; nonlegacy Regions=7, eight 1024x16 banks each",
+  "scope": "accelerator/NICE/DMA/ICB/private112KiB; no CPU or shared TCM",
+  "qualification": "native DC/function/equivalence not yet run",
+  "source_origins": {
+    "Rtl/TpuPkg.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "fe17f3adce7dc5397bee1c6766ecb02e07a8e539e15e93a9e539c547bcb8af43"
+    },
+    "Rtl/TpuLut.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "5e6b3630627228cbb7205239c024c71010fcfdd2dc8b8de89cd4aa9c2ddaa81c"
+    },
+    "Rtl/TpuDot.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "7962c8601c0a8faf319df358419048e3af7a3732a8f1b8678c2df5bccc9aef2b"
+    },
+    "Rtl/TpuDivide.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "7fe16ae7022f301ef9b67f5de39487d98051de8712caca34d8e83b4ef85821a5"
+    },
+    "Rtl/TpuSqrt.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "7440dc87b6443005147343762e445f0c2addd08aaa09333e4d9a0cf0d346528e"
+    },
+    "Rtl/TpuSram.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "62819250f3e8eef971bde8d92d157ae4edb1d8077c3b7c1f148f0ade2cec478b"
+    },
+    "Rtl/TpuRowBuffer.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "5a69e94e6fbb8282a46b6d39718b4e5bb6d705f4c67e746cf6dd684350d96320"
+    },
+    "Rtl/TpuMatmul.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "57cab22dd98532ce9318dba9d378ca86f86bb5492405ab02654f3799226cce98"
+    },
+    "Rtl/TpuGelu.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "8fa1931c5ee0b362c3c962c9b95aba26dc247757091419ade55794b15af9e040"
+    },
+    "Rtl/TpuVector.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "64052f5f4f6715186ac9b287d792c61c97a1fb02f48c10a3ecc922a1209f9adc"
+    },
+    "Rtl/TpuDma.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "85671c8b8946f0264ea3f20dd2a9dacfad58c89125c739413d2c70095aa97b57"
+    },
+    "Rtl/TpuTop.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "fe9d9d22594a4318ac2a73ba93b150d4f01dedafd1fecd6f51888445f6dda508"
+    },
+    "Rtl/TpuNice.sv": {
+      "commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+      "git_bytes_sha256": "ad82730df7c57fc78e4b52689e64129d4d6d72a23d3183ea697d5fc1d9d5d972"
+    },
+    "Rtl/TpuIcb.sv": {
+      "local_integration_sha256": "29822e4ffdde8d501815c904405313497f02a392452119f7457867de7e9e54b7"
+    },
+    "Backend/e203_subsys_nice_core.sv": {
+      "local_integration_sha256": "f7414c0940d5f2b4b6a6b9dcc845cb36de60cc1bd7b6d060616407cef2446c4c"
+    },
+    "Server/Backend/SpFoundry.sv": {
+      "local_integration_sha256": "7bae3faed0566b9d5ecdf9a3704238cb2b3099eb2df1a09739829739dcaba232"
+    }
+  }
+}

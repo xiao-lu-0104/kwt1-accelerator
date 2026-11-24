@@ -1,0 +1,13 @@
+{
+  "source_commit": "707cd7f4a0a4d416d11bac71112980079e0a9d34",
+  "initial_package_sha256": "b4d7bb93052e9d2bd88a44b1bbe58926826a5181a825c1524ed25a1af04f686c",
+  "scope": "independent initial-library audit and saved legalize diagnostic qualification, then actual PG/checks; no legalization rerun",
+  "limits_seconds": {
+    "legalize": 3600,
+    "pg_core": 3600,
+    "connectivity": 1800,
+    "drc": 3600
+  },
+  "failed_pg_manifest_sha256": "fa921ce0ec3d2436fedb7919daef93a5d4579a7b79bb1aeca16e01ca87028d68",
+  "diagnostic_manifest_sha256": "57ef7d19c60abcff9ad9ea631e802344ae3b12ba5a94e8ae1d22b936f20a0285"
+}

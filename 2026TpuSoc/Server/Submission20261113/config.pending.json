@@ -1,0 +1,43 @@
+{
+  "frontend_bound": false,
+  "source_commit": "PENDING_NEW_FRONTEND_COMMIT",
+  "source_root": "PENDING_CLEAN_SOURCE_DIRECTORY",
+  "topology_review": "PENDING_NEW_SYSBUS32_REVIEW.json",
+  "clock_hz": 150000000,
+  "corner": "SMIC40 RVT TT 1.1V 25C",
+  "dc_bin": "/eda/synopsys/dc/dc_2022.03-SP5-5/bin/dc_shell",
+  "icc2_bin": "/eda/synopsys/icc2/icc2_2022.03-SP2-1/bin/icc2_shell",
+  "stdcell_db": "PENDING_PDK_CACHE_STDCELL_DB",
+  "sram_dbs": [],
+  "technology_tf": "PENDING_PDK_CACHE_TECHNOLOGY_TF",
+  "reference_ndms": [],
+  "rc_tluplus": "PENDING_StarRC_40LL_1P8M_1TM_TYP.tluplus",
+  "rc_map": "PENDING_StarRC_40LL_1P8M_1TM_cell.map",
+  "evaluation_command": [],
+  "gate_check_command": [],
+  "targets": {
+    "accelerator": {
+      "top": "PENDING_ACCELERATOR_TOP",
+      "sources": [],
+      "include_dirs": [],
+      "defines": ["SYNTHESIS", "TPU_SRAM_MODEL"],
+      "clock_port": "PENDING_CLOCK_PORT",
+      "forwarded_clock_ports": [],
+      "constraints": "PENDING_NEW_ACCELERATOR_CONSTRAINTS.tcl",
+      "macro_counts": {},
+      "saif_instance": "PENDING_NEW_TB_INSTANCE"
+    },
+    "system": {
+      "top": "PENDING_PLATFORM_SOC_TOP",
+      "sources": [],
+      "include_dirs": [],
+      "defines": ["SYNTHESIS", "TPU_SRAM_MODEL"],
+      "clock_port": "PENDING_CLOCK_PORT",
+      "forwarded_clock_ports": [],
+      "constraints": "PENDING_NEW_SYSTEM_CONSTRAINTS.tcl",
+      "macro_counts": {},
+      "accelerator_scope": "PENDING_NEW_ACCELERATOR_INSTANCE",
+      "saif_instance": "PENDING_NEW_TB_SYSTEM_INSTANCE"
+    }
+  }
+}
